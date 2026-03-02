@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IBM Storage Protect — Tape Library Configuration Guide</title>
+<style>
+  /* ===== Reset & Base ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #0d0d1a;
+    --bg2:        #13132a;
+    --bg3:        #1a1a3a;
+    --sidebar-bg: #0f0f24;
+    --border:     #2a2a4a;
+    --text:       #c8cce8;
+    --text-dim:   #6b6f9c;
+    --accent:     #00d4ff;
+    --green:      #4ecca3;
+    --yellow:     #ffd166;
+    --red:        #ef4444;
+    --blue:       #5b8dee;
+    --cmd-bg:     #0a0a1f;
+    --cmd-border: #1e2050;
+    --header-h:   56px;
+    --sidebar-w:  270px;
+    --radius:     8px;
+    --transition: 0.18s ease;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ===== Top Header ===== */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--header-h);
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 20px;
+    z-index: 200;
+  }
+
+  #hamburger {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background var(--transition);
+  }
+  #hamburger:hover { background: var(--bg3); }
+
+  #header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #header-search {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ===== Layout ===== */
+  #layout {
+    display: flex;
+    padding-top: var(--header-h);
+    min-height: 100vh;
+  }
+
+  /* ===== Sidebar ===== */
+  #sidebar {
+    position: fixed;
+    top: var(--header-h);
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    z-index: 100;
+    transition: transform var(--transition);
+    padding-bottom: 24px;
+  }
+
+  #sidebar-search-wrap {
+    padding: 12px 14px 8px;
+    position: sticky;
+    top: 0;
+    background: var(--sidebar-bg);
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #sidebar-search {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  #sidebar-search:focus { border-color: var(--accent); }
+  #sidebar-search::placeholder { color: var(--text-dim); }
+
+  #nav-list {
+    list-style: none;
+    padding: 8px 0;
+  }
+
+  #nav-list li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13.5px;
+    border-left: 3px solid transparent;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+    cursor: pointer;
+  }
+  #nav-list li a:hover {
+    background: var(--bg3);
+    color: var(--accent);
+  }
+  #nav-list li a.active {
+    background: rgba(0, 212, 255, 0.08);
+    border-left-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  #nav-list li.hidden { display: none; }
+
+  .nav-icon { font-size: 16px; flex-shrink: 0; }
+  .nav-label { flex: 1; }
+
+  /* ===== Main Content ===== */
+  #main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    padding: 28px 32px 60px;
+    max-width: 960px;
+  }
+
+  /* ===== Sections ===== */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-bottom: 22px;
+  }
+
+  .copy-all-wrap {
+    margin-bottom: 22px;
+  }
+
+  /* ===== Subsections ===== */
+  .subsection {
+    margin-bottom: 32px;
+  }
+
+  .subsection h3 {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+
+  /* ===== Command Block ===== */
+  .cmd-block {
+    position: relative;
+    background: var(--cmd-bg);
+    border: 1px solid var(--cmd-border);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color var(--transition);
+  }
+  .cmd-block:hover { border-color: var(--accent); }
+
+  .cmd-label {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    padding: 7px 14px 0;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .cmd-pre {
+    font-family: 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px;
+    color: #e0e6ff;
+    padding: 10px 14px 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  .cmd-copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 5px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+    white-space: nowrap;
+    font-family: 'Inter', sans-serif;
+  }
+  .cmd-copy-btn:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+  .cmd-copy-btn.copied {
+    background: var(--green);
+    color: #000;
+    border-color: var(--green);
+  }
+
+  /* ===== Callout Boxes ===== */
+  .callout {
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    border-left: 4px solid;
+    font-size: 13.5px;
+  }
+  .callout-info  { background: rgba(0,212,255,0.07);  border-color: var(--accent); }
+  .callout-warn  { background: rgba(255,209,102,0.07); border-color: var(--yellow); color: var(--yellow); }
+  .callout-error { background: rgba(239,68,68,0.07);  border-color: var(--red);    color: #f88; }
+  .callout-ok    { background: rgba(78,204,163,0.07); border-color: var(--green);  color: var(--green); }
+
+  .callout strong { display: block; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; }
+  .callout ul { margin-left: 18px; margin-top: 4px; }
+  .callout li { margin-bottom: 4px; }
+
+  /* ===== Reference Links ===== */
+  .ref-list { list-style: none; }
+  .ref-list li {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ref-list li:last-child { border-bottom: none; }
+  .ref-list a {
+    color: var(--blue);
+    text-decoration: none;
+    font-size: 13.5px;
+    transition: color var(--transition);
+  }
+  .ref-list a:hover { color: var(--accent); text-decoration: underline; }
+
+  /* ===== Checklist ===== */
+  .checklist { list-style: none; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 5px 0;
+  }
+  .check-icon { color: var(--green); font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+
+  /* ===== Attribute table ===== */
+  .attr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .attr-table th {
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: 600;
+    padding: 7px 12px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .attr-table td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  }
+  .attr-table tr:last-child td { border-bottom: none; }
+  .attr-table td:first-child { color: var(--accent); }
+  .attr-table td:last-child { color: var(--text-dim); font-family: 'Inter', sans-serif; }
+
+  /* ===== Buttons ===== */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    border: 1px solid;
+    transition: background var(--transition), color var(--transition);
+  }
+  .btn-primary {
+    background: rgba(0,212,255,0.12);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent); color: #000; }
+  .btn-primary.copied { background: var(--green); color: #000; border-color: var(--green); }
+
+  /* ===== Overlay for mobile ===== */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 90;
+  }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 900px) {
+    #main { padding: 20px 16px 60px; max-width: 100%; }
+  }
+  @media (max-width: 768px) {
+    #hamburger { display: block; }
+    #sidebar {
+      transform: translateX(-100%);
+    }
+    #sidebar.open {
+      transform: translateX(0);
+      box-shadow: 4px 0 20px rgba(0,0,0,0.6);
+    }
+    #overlay.open { display: block; }
+    #main { margin-left: 0; padding: 16px 12px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header id="header">
+  <button id="hamburger" aria-label="Toggle sidebar">☰</button>
+  <h1>🖥️ IBM Storage Protect — Tape Library Configuration Guide</h1>
+</header>
+
+<!-- ===== Overlay (mobile) ===== -->
+<div id="overlay"></div>
+
+<!-- ===== Layout ===== -->
+<div id="layout">
+
+  <!-- ===== Sidebar ===== -->
+  <nav id="sidebar" aria-label="Section navigation">
+    <div id="sidebar-search-wrap">
+      <input id="sidebar-search" type="search" placeholder="Filter sections…" autocomplete="off" />
+    </div>
+    <ul id="nav-list">
+      <li data-section="reference"><a href="#reference"><span class="nav-icon">📚</span><span class="nav-label">Reference Documentation</span></a></li>
+      <li data-section="prerequisites"><a href="#prerequisites"><span class="nav-icon">🔍</span><span class="nav-label">Prerequisites</span></a></li>
+      <li data-section="driver-install"><a href="#driver-install"><span class="nav-icon">📦</span><span class="nav-label">lin_tape Driver Installation</span></a></li>
+      <li data-section="daemon"><a href="#daemon"><span class="nav-icon">🔧</span><span class="nav-label">lin_taped Daemon Management</span></a></li>
+      <li data-section="boot"><a href="#boot"><span class="nav-icon">🔄</span><span class="nav-label">Boot Persistence</span></a></li>
+      <li data-section="discovery"><a href="#discovery"><span class="nav-icon">🖥️</span><span class="nav-label">Device Discovery</span></a></li>
+      <li data-section="udev"><a href="#udev"><span class="nav-icon">🔗</span><span class="nav-label">Persistent Device Binding (udev)</span></a></li>
+      <li data-section="sp-config"><a href="#sp-config"><span class="nav-icon">⚙️</span><span class="nav-label">Storage Protect Configuration</span></a></li>
+      <li data-section="failover"><a href="#failover"><span class="nav-icon">🔀</span><span class="nav-label">Dual-Path Failover</span></a></li>
+      <li data-section="verification"><a href="#verification"><span class="nav-icon">✅</span><span class="nav-label">Verification &amp; Testing</span></a></li>
+      <li data-section="diagnostics"><a href="#diagnostics"><span class="nav-icon">🏥</span><span class="nav-label">Diagnostics &amp; Troubleshooting</span></a></li>
+    </ul>
+  </nav>
+
+  <!-- ===== Main Content ===== -->
+  <main id="main">
+
+    <!-- ===================================== -->
+    <!-- 1. Reference Documentation            -->
+    <!-- ===================================== -->
+    <section id="reference" class="section">
+      <div class="section-title"><span>📚</span> Reference Documentation</div>
+      <p class="section-desc">Official IBM, Red Hat, and community documentation links for tape driver setup and Storage Protect configuration.</p>
+
+      <div class="subsection">
+        <h3>lin_tape Driver</h3>
+        <ul class="ref-list">
+          <li><a href="https://www.ibm.com/support/pages/system/files/inline-files/IBM%20Tape%20Device%20Drivers%20and%20Diagnostic%20Tool%20User%27s%20Guide%2020251029.pdf" target="_blank" rel="noopener noreferrer">IBM Tape Device Drivers Installation and User's Guide (Oct 2025)</a></li>
+          <li><a href="https://delivery04.dhe.ibm.com/sar/CMA/STA/0ce5b/0/lin_tape.ReadMe" target="_blank" rel="noopener noreferrer">IBM lin_tape ReadMe</a></li>
+          <li><a href="https://delivery04.dhe.ibm.com/sar/CMA/STA/0d9la/1/lin_tape.fixlist" target="_blank" rel="noopener noreferrer">IBM lin_tape Fix List</a></li>
+          <li><a href="https://delivery04.dhe.ibm.com/sar/CMA/STA/0ciye/0/lin_tape_daemon.txt" target="_blank" rel="noopener noreferrer">IBM lin_taped Daemon ReadMe</a></li>
+          <li><a href="https://www.ibm.com/support/pages/installing-lintape-device-driver" target="_blank" rel="noopener noreferrer">Installing lin_tape (IBM Support)</a></li>
+          <li><a href="https://public.dhe.ibm.com/storage/devdrvr/IBM_Fix_Central_Site.html" target="_blank" rel="noopener noreferrer">IBM Fix Central — Tape Drivers</a></li>
+        </ul>
+      </div>
+
+      <div class="subsection">
+        <h3>Dual Pathing / Multipath</h3>
+        <ul class="ref-list">
+          <li><a href="https://www.ibm.com/docs/en/SSEQVQ_8.1.27/pdf/b_tape_solution.pdf" target="_blank" rel="noopener noreferrer">SP 8.1.27 Tape Solution Guide</a></li>
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.27?topic=devices-multipath-io-access-tape" target="_blank" rel="noopener noreferrer">Multipath I/O with IBM tape devices</a></li>
+          <li><a href="https://www.ibm.com/docs/en/ts4300-tape-library?topic=lf-control-path-failover-data-path-failover-load-balancing" target="_blank" rel="noopener noreferrer">Control/Data Path Failover &amp; Load Balancing</a></li>
+        </ul>
+      </div>
+
+      <div class="subsection">
+        <h3>Tape Library Guides</h3>
+        <ul class="ref-list">
+          <li><a href="https://www.redbooks.ibm.com/redbooks/pdfs/sg245946.pdf" target="_blank" rel="noopener noreferrer">IBM Tape Library Guide for Open Systems (Redbook, Aug 2024)</a></li>
+          <li><a href="https://www.ibm.com/support/pages/ibm-tape-device-drivers-installation-and-users-guide" target="_blank" rel="noopener noreferrer">IBM Tape Device Drivers Guide (main page)</a></li>
+        </ul>
+      </div>
+
+      <div class="subsection">
+        <h3>RHEL / systemd</h3>
+        <ul class="ref-list">
+          <li><a href="https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings" target="_blank" rel="noopener noreferrer">RHEL 8 Managing systemd</a></li>
+          <li><a href="https://www.ibm.com/docs/en/tslm/1.4.0?topic=reference-how-configure-device-files-scsi-media-changers-linux-platforms" target="_blank" rel="noopener noreferrer">SCSI media changers on Linux</a></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 2. Prerequisites                      -->
+    <!-- ===================================== -->
+    <section id="prerequisites" class="section">
+      <div class="section-title"><span>🔍</span> Prerequisites</div>
+      <p class="section-desc">Verify the system meets all requirements before installing lin_tape.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="prerequisites">📋 Copy All Commands</button>
+      </div>
+
+      <ul class="checklist">
+        <li><span class="check-icon">✔</span><span>Running as root</span></li>
+      </ul>
+      <div class="cmd-block">
+        <div class="cmd-label">Check root</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">test "$(id -u)" -eq 0 &amp;&amp; echo "OK: Running as root" || echo "FAIL: Not root"</pre>
+      </div>
+
+      <ul class="checklist" style="margin-top:10px">
+        <li><span class="check-icon">✔</span><span>RHEL detected</span></li>
+      </ul>
+      <div class="cmd-block">
+        <div class="cmd-label">Check OS</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">cat /etc/redhat-release</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Check kernel version</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">uname -r</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Check kernel-devel is installed</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">rpm -q "kernel-devel-$(uname -r)"</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Install kernel-devel if missing</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">yum install -y "kernel-devel-$(uname -r)" gcc make</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Check gcc</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">command -v gcc</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Check make</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">command -v make</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Check lsscsi</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">command -v lsscsi</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Install lsscsi if missing</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">yum install -y lsscsi</pre>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-label">Check udevadm</div>
+        <button class="cmd-copy-btn">📋 Copy</button>
+        <pre class="cmd-pre">command -v udevadm</pre>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 3. lin_tape Driver Installation       -->
+    <!-- ===================================== -->
+    <section id="driver-install" class="section">
+      <div class="section-title"><span>📦</span> lin_tape Driver Installation</div>
+      <p class="section-desc">Install and manage the IBM lin_tape kernel module on RHEL.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="driver-install">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>Check Current State</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if lin_tape is loaded</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lsmod | grep lin_tape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check lin_tape module info</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">modinfo lin_tape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if lin_tape RPM is installed</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rpm -qa | grep -i lin_tape</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Download &amp; Install</h3>
+        <div class="callout callout-info">
+          <strong>ℹ Download Location</strong>
+          IBM Fix Central: <a href="https://public.dhe.ibm.com/storage/devdrvr/IBM_Fix_Central_Site.html" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">IBM_Fix_Central_Site.html</a><br>
+          Navigate: <em>Product Group: Storage Systems → Tape Systems → Tape Device Drivers → Linux/Red Hat</em>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Install lin_tape RPM</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rpm -ivh lin_tape-&lt;version&gt;.x86_64.rpm</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Build from source RPM (alternative)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rpmbuild --rebuild lin_tape-&lt;version&gt;.src.rpm</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Blacklist Generic Drivers</h3>
+        <div class="callout callout-warn">
+          <strong>⚠ Important</strong>
+          The generic <code>st</code> (tape) and <code>sg</code> (SCSI generic) drivers conflict with lin_tape. They must be blacklisted.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">File: /etc/modprobe.d/blacklist-tape-generic.conf</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre"># Blacklist generic SCSI tape/generic drivers
+blacklist st
+blacklist sg</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Create blacklist file (heredoc)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat &gt; /etc/modprobe.d/blacklist-tape-generic.conf &lt;&lt;'EOF'
+# Blacklist generic SCSI tape/generic drivers
+blacklist st
+blacklist sg
+EOF</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Unload generic drivers</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rmmod st 2&gt;/dev/null; rmmod sg 2&gt;/dev/null</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Load &amp; Verify</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Load lin_tape module</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">modprobe lin_tape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify devices appeared</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/IBMtape* /dev/IBMchanger*</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 4. lin_taped Daemon Management        -->
+    <!-- ===================================== -->
+    <section id="daemon" class="section">
+      <div class="section-title"><span>🔧</span> lin_taped Daemon Management</div>
+      <p class="section-desc">Install, start, stop, and monitor the lin_taped user-space daemon.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="daemon">📋 Copy All Commands</button>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>ℹ Important Notes</strong>
+        <ul>
+          <li>lin_taped must be stopped before unloading lin_tape (<code>rmmod lin_tape</code>)</li>
+          <li>lin_taped handles device node creation/deletion in <code>/dev/IBMtape*</code> and <code>/dev/IBMchanger*</code></li>
+          <li>lin_taped provides control path failover and data path failover features</li>
+          <li>If tape devices are added/removed, reload the lin_tape module and restart lin_taped</li>
+        </ul>
+      </div>
+
+      <div class="subsection">
+        <h3>Install</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if lin_taped RPM is installed</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rpm -qa | grep -i lin_taped</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Install lin_taped RPM</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rpm -ivh lin_taped-&lt;version&gt;.x86_64.rpm</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Service Control</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Start lin_taped (vendor command)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lin_taped start</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Start lin_taped (systemd)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl start lin_taped</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Stop lin_taped (vendor command)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lin_taped stop</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Stop lin_taped (systemd)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl stop lin_taped</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Restart lin_taped</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lin_taped restart</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check status (vendor)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lin_taped status</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check status (systemd)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl status lin_taped</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Enable lin_taped at boot</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl enable lin_taped</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if lin_taped process is running</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">pgrep -a lin_taped</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 5. Boot Persistence                   -->
+    <!-- ===================================== -->
+    <section id="boot" class="section">
+      <div class="section-title"><span>🔄</span> Boot Persistence</div>
+      <p class="section-desc">Ensure lin_tape loads automatically after every reboot.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="boot">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>modules-load.d</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Ensure lin_tape loads at boot</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">echo "lin_tape" &gt; /etc/modules-load.d/lin_tape.conf</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Module Options</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">File: /etc/modprobe.d/lin_tape.conf</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">options lin_tape alternate_pathing=1</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Create modprobe options file</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">echo "options lin_tape alternate_pathing=1" &gt; /etc/modprobe.d/lin_tape.conf</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>systemd Service (Vendor or Custom)</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check for vendor-provided systemd service</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl list-unit-files | grep lin_tape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Enable vendor service if it exists</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl enable lin_tape &amp;&amp; systemctl start lin_tape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">File: /etc/systemd/system/lin_tape_load.service (custom fallback)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">[Unit]
+Description=Load IBM lin_tape kernel module
+After=systemd-modules-load.service
+Before=lin_taped.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/modprobe lin_tape
+
+[Install]
+WantedBy=multi-user.target</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Enable custom service</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl daemon-reload &amp;&amp; systemctl enable lin_tape_load.service</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>initramfs</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Rebuild initramfs including lin_tape</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dracut --add-drivers "lin_tape" --force</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify boot persistence</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl is-enabled lin_tape_load 2&gt;/dev/null || systemctl is-enabled lin_tape 2&gt;/dev/null</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 6. Device Discovery                   -->
+    <!-- ===================================== -->
+    <section id="discovery" class="section">
+      <div class="section-title"><span>🖥️</span> Device Discovery</div>
+      <p class="section-desc">Enumerate tape drives, changers, and FC HBA ports after lin_tape is loaded.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="discovery">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>List Devices</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">List tape devices</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/IBMtape*</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">List changer devices</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/IBMchanger*</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">List all SCSI devices</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lsscsi -g</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>udev / Device Properties</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Get all udev info for a device</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">udevadm info --query=all --name=/dev/IBMtape0</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Get device properties</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">udevadm info --query=property --name=/dev/IBMtape0</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Get device serial number</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">udevadm info --query=property --name=/dev/IBMtape0 | grep -E 'ID_SCSI_SERIAL|ID_SERIAL_SHORT'</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Walk sysfs attributes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">udevadm info --attribute-walk --name=/dev/IBMtape0 | head -60</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check /proc for tape info</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /proc/scsi/IBMtape 2&gt;/dev/null</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>FC HBA Ports</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">List all FC HBA ports (WWPN + state)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for host_dir in /sys/class/fc_host/host*; do
+    host=$(basename "$host_dir")
+    wwpn=$(cat "${host_dir}/port_name" 2&gt;/dev/null)
+    state=$(cat "${host_dir}/port_state" 2&gt;/dev/null)
+    echo "  ${host}: WWPN=${wwpn}  State=${state}"
+done</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Kernel Messages</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Recent dmesg — tape-related entries</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dmesg | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 7. Persistent Device Binding (udev)   -->
+    <!-- ===================================== -->
+    <section id="udev" class="section">
+      <div class="section-title"><span>🔗</span> Persistent Device Binding (udev)</div>
+      <p class="section-desc">Create stable symlinks under <code>/dev/tsmtape/</code> so Storage Protect always finds the same device paths, even if kernel device numbering changes.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="udev">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>udev Rules Template</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">File: /etc/udev/rules.d/99-ibm-tape-persist.rules</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre"># IBM Storage Protect — Persistent tape device symlinks
+# Library: Spectra Logic with IBM LTO drives (dual-pathed)
+
+# --- Medium Changer (Library) ---
+KERNEL=="IBMchanger[0-9]*", ATTRS{serial}=="LIBRARY_SERIAL", SYMLINK+="tsmtape/library0"
+
+# --- Drive 01 (serial: DRIVE01_SERIAL) ---
+KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE01_SERIAL", ENV{ID_PATH}=="*-lun-0", SYMLINK+="tsmtape/drive01_path0"
+KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE01_SERIAL", ENV{ID_PATH}=="*-lun-1", SYMLINK+="tsmtape/drive01_path1"
+
+# --- Drive 02 (serial: DRIVE02_SERIAL) ---
+KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-0", SYMLINK+="tsmtape/drive02_path0"
+KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1", SYMLINK+="tsmtape/drive02_path1"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Apply Rules</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Create symlink directory</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">mkdir -p /dev/tsmtape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Reload udev rules and trigger</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">udevadm control --reload-rules &amp;&amp; udevadm trigger</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify symlinks created</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/tsmtape/</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check symlink targets</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">readlink -f /dev/tsmtape/*</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Useful udev Match Attributes</h3>
+        <table class="attr-table">
+          <thead>
+            <tr><th>Attribute</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ATTRS{serial}</td><td>Drive serial number (most reliable key)</td></tr>
+            <tr><td>ATTRS{vendor}</td><td>e.g. 'IBM'</td></tr>
+            <tr><td>ATTRS{model}</td><td>e.g. 'ULT3580-HH9' (LTO-9)</td></tr>
+            <tr><td>ENV{ID_PATH}</td><td>HBA path identifier — use for dual-path matching</td></tr>
+            <tr><td>ENV{ID_SCSI_SERIAL}</td><td>SCSI serial string</td></tr>
+            <tr><td>ENV{ID_SERIAL_SHORT}</td><td>Short serial number</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 8. Storage Protect Configuration      -->
+    <!-- ===================================== -->
+    <section id="sp-config" class="section">
+      <div class="section-title"><span>⚙️</span> Storage Protect Configuration</div>
+      <p class="section-desc">dsmadmc commands to define the library, drives, device class, and storage pool in IBM Storage Protect.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="sp-config">📋 Copy All Commands</button>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠ Placeholder Values</strong>
+        Replace <code>SERVERNAME</code>, <code>ADMIN</code>, <code>PASSWORD</code>, <code>SPECTRALIB</code>, element addresses, and serial numbers with your actual values before running these commands.
+      </div>
+
+      <div class="subsection">
+        <h3>Connect to Storage Protect</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Locate dsmadmc binary</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">command -v dsmadmc || ls /opt/tivoli/tsm/client/ba/bin/dsmadmc /opt/tivoli/tsm/server/bin/dsmadmc 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Connect to SP admin console</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD -displ=list</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Define Library</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Define SCSI library</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE LIBRARY SPECTRALIB LIBTYPE=SCSI</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Define library path</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE PATH SERVERNAME SPECTRALIB SRCTYPE=SERVER DESTTYPE=LIBRARY DEVICE=/dev/tsmtape/library0 ONLINE=YES</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Define Drives</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Define drive (ELEMENT= is the library element address)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE DRIVE SPECTRALIB DRIVE01 ELEMENT=256 CLEANFREQUENCY=ASNEEDED</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Define primary drive path</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path0 ONLINE=YES</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Define secondary drive path (dual-path)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path1 ONLINE=YES</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Audit &amp; Configure</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Audit library (reads barcodes)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">AUDIT LIBRARY SPECTRALIB CHECKLABEL=BARCODE</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Define LTO device class</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE DEVCLASS LTO_DC DEVTYPE=LTO LIBRARY=SPECTRALIB FORMAT=DRIVE MOUNTRETENTION=60 MOUNTWAIT=60 MOUNTLIMIT=DRIVES</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Define storage pool</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">DEFINE STGPOOL LTO_POOL LTO_DC MAXSCRATCH=500 COLLOCATE=FILESPACE REUSEDELAY=1</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Label and check in tapes from barcodes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">LABEL LIBVOLUME SPECTRALIB SEARCH=YES LABELSOURCE=BARCODE CHECKIN=SCRATCH OVERWRITE=NO</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 9. Dual-Path Failover                 -->
+    <!-- ===================================== -->
+    <section id="failover" class="section">
+      <div class="section-title"><span>🔀</span> Dual-Path Failover</div>
+      <p class="section-desc">Configure and test control/data path failover with lin_tape's <code>alternate_pathing</code> feature.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="failover">📋 Copy All Commands</button>
+      </div>
+
+      <div class="callout callout-error">
+        <strong>⛔ Warning — Maintenance Window Required</strong>
+        Failover testing temporarily takes drive paths offline. Run during a maintenance window only!
+      </div>
+
+      <div class="subsection">
+        <h3>Check Alternate Pathing</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check alternate_pathing module parameter</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/module/lin_tape/parameters/alternate_pathing 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify all paths are online</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH FORMAT=DETAILED" | grep -E "Source Name|Destination Name|Device|Online"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Failover Test</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Take path0 offline (simulate failure)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "UPDATE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path0 ONLINE=NO"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query drive status (should show active on path1)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE SPECTRALIB DRIVE01 FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Restore path0 online</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "UPDATE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path0 ONLINE=YES"</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 10. Verification & Testing            -->
+    <!-- ===================================== -->
+    <section id="verification" class="section">
+      <div class="section-title"><span>✅</span> Verification &amp; Testing</div>
+      <p class="section-desc">Query commands to verify the full configuration is working correctly in Storage Protect.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="verification">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>Query Library &amp; Drives</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Query library (detailed)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBRARY SPECTRALIB FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query library path</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH SERVERNAME SPECTRALIB SRCTYPE=SERVER DESTTYPE=LIBRARY"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query all drives</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE SPECTRALIB"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query all paths (detailed)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH FORMAT=DETAILED"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Query Device Class &amp; Pool</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Query device class (detailed)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DEVCLASS LTO_DC FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query storage pool (detailed)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY STGPOOL LTO_POOL FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query library volumes (tape inventory)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBVOLUME SPECTRALIB"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Query volumes in pool</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY VOLUME * STGPOOL=LTO_POOL"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Test Archive</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Test archive a file to tape</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmc archive /tmp/testfile -se=SERVERNAME</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 11. Diagnostics & Troubleshooting     -->
+    <!-- ===================================== -->
+    <section id="diagnostics" class="section">
+      <div class="section-title"><span>🏥</span> Diagnostics &amp; Troubleshooting</div>
+      <p class="section-desc">Quick diagnostic commands and a full status script for when things go wrong.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="diagnostics">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>Full Status Script</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Run full driver &amp; device diagnostic check</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">echo "=== lin_tape Status ==="
+lsmod | grep lin_tape
+modinfo lin_tape 2&gt;/dev/null | head -10
+rpm -qa | grep -i lin_tape
+echo ""
+echo "=== Devices ==="
+ls -la /dev/IBMtape* /dev/IBMchanger* 2&gt;/dev/null
+echo ""
+echo "=== Symlinks ==="
+ls -la /dev/tsmtape/ 2&gt;/dev/null
+echo ""
+echo "=== FC HBAs ==="
+for h in /sys/class/fc_host/host*; do
+    [ -d "$h" ] || continue
+    echo "$(basename $h): WWPN=$(cat $h/port_name 2&gt;/dev/null) State=$(cat $h/port_state 2&gt;/dev/null)"
+done
+echo ""
+echo "=== dmesg (tape) ==="
+dmesg | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Error Checks</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check for SCSI reservation conflicts</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dmesg | grep -i "reservation conflict"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check SCSI errors and timeouts</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dmesg | grep -i -E "scsi|error|timeout" | tail -20</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify kernel module parameters</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/module/lin_tape/parameters/* 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check all lin_tape systemd service statuses</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl status lin_tape lin_taped lin_tape_load 2&gt;/dev/null</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  /* ===== Utility ===== */
+
+  /**
+   * Extract plain text from a command block's <pre> element,
+   * reversing HTML entity escaping applied in the markup.
+   */
+  function cmdText(pre) {
+    // innerHTML preserves entities; textContent gives decoded text
+    return pre.textContent;
+  }
+
+  /**
+   * Copy text to clipboard and give visual feedback on a button.
+   */
+  function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(function () {
+      var orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 2000);
+    }).catch(function () {
+      // Fallback for file:// or restricted contexts
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      var orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  /* ===== Per-command Copy buttons ===== */
+  document.querySelectorAll('.cmd-copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var block = btn.closest('.cmd-block');
+      var pre = block.querySelector('.cmd-pre');
+      copyToClipboard(cmdText(pre), btn);
+    });
+  });
+
+  /* ===== Copy All buttons ===== */
+  document.querySelectorAll('.copy-all-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var sectionId = btn.dataset.section;
+      var section = document.getElementById(sectionId);
+      var pres = section.querySelectorAll('.cmd-pre');
+      var lines = [];
+      pres.forEach(function (pre) {
+        lines.push(cmdText(pre));
+      });
+      copyToClipboard(lines.join('\n\n'), btn);
+    });
+  });
+
+  /* ===== Navigation ===== */
+  var navLinks = document.querySelectorAll('#nav-list li a');
+  var sections = document.querySelectorAll('.section');
+
+  function showSection(id) {
+    sections.forEach(function (s) { s.classList.remove('active'); });
+    navLinks.forEach(function (a) { a.classList.remove('active'); });
+
+    var target = document.getElementById(id);
+    if (target) {
+      target.classList.add('active');
+    }
+
+    var activeLink = document.querySelector('#nav-list li[data-section="' + id + '"] a');
+    if (activeLink) {
+      activeLink.classList.add('active');
+    }
+
+    // Update URL hash without scrolling
+    if (history.replaceState) {
+      history.replaceState(null, '', '#' + id);
+    }
+  }
+
+  navLinks.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var li = a.closest('li[data-section]');
+      if (li) {
+        showSection(li.dataset.section);
+        // Close sidebar on mobile
+        if (window.innerWidth <= 768) {
+          closeSidebar();
+        }
+      }
+    });
+  });
+
+  // Load section from URL hash on page load
+  function getInitialSection() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById(hash)) {
+      return hash;
+    }
+    return 'reference';
+  }
+
+  showSection(getInitialSection());
+
+  window.addEventListener('hashchange', function () {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById(hash)) {
+      showSection(hash);
+    }
+  });
+
+  /* ===== Sidebar toggle (mobile) ===== */
+  var sidebar  = document.getElementById('sidebar');
+  var overlay  = document.getElementById('overlay');
+  var hamburger = document.getElementById('hamburger');
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+  }
+
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+
+  hamburger.addEventListener('click', function () {
+    if (sidebar.classList.contains('open')) {
+      closeSidebar();
+    } else {
+      openSidebar();
+    }
+  });
+
+  overlay.addEventListener('click', closeSidebar);
+
+  /* ===== Sidebar search / filter ===== */
+  var searchInput = document.getElementById('sidebar-search');
+  var navItems = document.querySelectorAll('#nav-list li[data-section]');
+
+  searchInput.addEventListener('input', function () {
+    var q = searchInput.value.trim().toLowerCase();
+    navItems.forEach(function (li) {
+      var label = li.querySelector('.nav-label').textContent.toLowerCase();
+      if (!q || label.includes(q)) {
+        li.classList.remove('hidden');
+      } else {
+        li.classList.add('hidden');
+      }
+    });
+  });
+</script>
+</body>
+</html>
