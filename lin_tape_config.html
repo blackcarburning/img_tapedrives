@@ -405,11 +405,13 @@
       <li data-section="boot"><a href="#boot"><span class="nav-icon">🔄</span><span class="nav-label">Boot Persistence</span></a></li>
       <li data-section="discovery"><a href="#discovery"><span class="nav-icon">🖥️</span><span class="nav-label">Device Discovery</span></a></li>
       <li data-section="udev"><a href="#udev"><span class="nav-icon">🔗</span><span class="nav-label">Persistent Device Binding (udev)</span></a></li>
+      <li data-section="dual-path"><a href="#dual-path"><span class="nav-icon">🔀</span><span class="nav-label">Dual-Pathed Drives</span></a></li>
       <li data-section="sp-config"><a href="#sp-config"><span class="nav-icon">⚙️</span><span class="nav-label">Storage Protect Configuration</span></a></li>
       <li data-section="failover"><a href="#failover"><span class="nav-icon">🔀</span><span class="nav-label">Dual-Path Failover</span></a></li>
       <li data-section="verification"><a href="#verification"><span class="nav-icon">✅</span><span class="nav-label">Verification &amp; Testing</span></a></li>
       <li data-section="diagnostics"><a href="#diagnostics"><span class="nav-icon">🏥</span><span class="nav-label">Diagnostics &amp; Troubleshooting</span></a></li>
       <li data-section="document-system"><a href="#document-system"><span class="nav-icon">📋</span><span class="nav-label">Document Existing System</span></a></li>
+      <li data-section="db-restore"><a href="#db-restore"><span class="nav-icon">🔄</span><span class="nav-label">Database Restore</span></a></li>
     </ul>
   </nav>
 
@@ -953,7 +955,177 @@ KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1
     </section>
 
     <!-- ===================================== -->
-    <!-- 8. Storage Protect Configuration      -->
+    <!-- 8. Dual-Pathed Tape Drives            -->
+    <!-- ===================================== -->
+    <section id="dual-path" class="section">
+      <div class="section-title"><span>🔀</span> Dual-Pathed Tape Drives</div>
+      <p class="section-desc">Configure IBM lin_tape alternate pathing for dual-connected tape drives. When enabled, the driver consolidates multiple physical paths into a single logical device — failover is handled transparently at the driver level, so IBM Storage Protect paths do not need to change.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="dual-path">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>How Alternate Pathing Works</h3>
+        <div class="callout callout-info">
+          <strong>How it works:</strong> When <code>alternate_pathing=1</code> is set, the lin_tape driver detects that two (or more) physical SCSI paths lead to the same tape drive (identified by serial number and WWN). Instead of creating separate device files (e.g., <code>/dev/IBMtape0</code> and <code>/dev/IBMtape1</code>), the driver consolidates them into a <strong>single logical device</strong> (<code>/dev/IBMtape0</code>) with a primary and alternate path. If the primary path fails (HBA failure, switch failure, cable issue), the driver automatically fails over to the alternate path — the device file name does not change. This means <strong>IBM Storage Protect does not need any path reconfiguration</strong> — the <code>DEFINE PATH</code> entries continue to point to the same <code>/dev/IBMtape0</code> device.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Conceptual architecture</div>
+          <pre class="cmd-pre">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+&#x2502;     IBM Storage Protect Server      &#x2502;
+&#x2502;  DEFINE PATH ... DEVICE=/dev/IBMtape0  &#x2502;
+&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;
+               &#x2502;
+        /dev/IBMtape0   &#x2190; single logical device
+               &#x2502;
+       &#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+       &#x2502;  lin_tape      &#x2502;
+       &#x2502;  (alternate_   &#x2502;
+       &#x2502;   pathing=1)   &#x2502;
+       &#x2514;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2518;
+           &#x2502;       &#x2502;
+    Primary Path  Alternate Path
+     HBA port0     HBA port1
+        &#x2502;              &#x2502;
+   FC Switch A    FC Switch B
+        &#x2502;              &#x2502;
+   &#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;   &#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+   &#x2502; Drive   &#x2502;   &#x2502; Drive   &#x2502;
+   &#x2502; Port A  &#x2502;   &#x2502; Port B  &#x2502;
+   &#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;   &#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;
+        &#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;
+          Same physical
+          tape drive</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Enable Alternate Pathing</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check current alternate_pathing status</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/module/lin_tape/parameters/alternate_pathing 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Create/edit modprobe config for lin_tape</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat &gt; /etc/modprobe.d/lin_tape.conf &lt;&lt;'EOF'
+options lin_tape alternate_pathing=1
+EOF</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Reload lin_tape with alternate pathing (requires stopping all tape I/O first)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl stop lin_tape 2&gt;/dev/null; rmmod lin_tape 2&gt;/dev/null; modprobe lin_tape; systemctl start lin_tape 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify alternate_pathing is now enabled</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/module/lin_tape/parameters/alternate_pathing</pre>
+        </div>
+        <div class="callout callout-warn">
+          <strong>⚠️ Warning:</strong> Unloading and reloading lin_tape will temporarily remove all <code>/dev/IBMtape*</code> and <code>/dev/IBMchanger*</code> device files. Ensure <strong>all tape I/O is quiesced</strong> before reloading — stop any running SP operations, dismount tapes, and ensure no processes have tape device files open. On a running SP server, use <code>DISABLE SESSIONS</code> and <code>HALT</code> first.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Verify Primary &amp; Alternate Paths</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">View all tape paths (primary/alternate)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /proc/scsi/IBMtape 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">View all changer paths (primary/alternate)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /proc/scsi/IBMchanger 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">List consolidated device files</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/IBMtape* /dev/IBMchanger* 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Confirm device count matches physical drives (not paths)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">echo "Tape devices: $(ls /dev/IBMtape[0-9]* 2&gt;/dev/null | wc -l)"; echo "Physical paths: $(grep -c . /proc/scsi/IBMtape 2&gt;/dev/null)"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check path details via udevadm</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for dev in /dev/IBMtape[0-9]*; do [ -e "$dev" ] || continue; echo "=== $dev ==="; udevadm info --query=property --name="$dev" 2&gt;/dev/null | grep -E 'SERIAL|SCSI|DEVPATH'; echo ""; done</pre>
+        </div>
+        <div class="callout callout-info">
+          <strong>✅ Expected result:</strong> With dual-pathed drives and <code>alternate_pathing=1</code>, you should see <strong>fewer device files</strong> than physical SCSI paths. For example, 4 physical paths to 2 drives should show only <code>/dev/IBMtape0</code> and <code>/dev/IBMtape1</code>. The <code>/proc/scsi/IBMtape</code> file will show all paths with their Primary/Alternate designation.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>What Happens Without Alternate Pathing</h3>
+        <div class="callout callout-error">
+          <strong>❌ Without <code>alternate_pathing=1</code>:</strong> Each physical path creates a <strong>separate</strong> device file. Two paths to one drive creates <code>/dev/IBMtape0</code> AND <code>/dev/IBMtape1</code>, both pointing to the same physical drive. This causes confusion, potential reservation conflicts, and requires careful manual management of which device file SP uses. You may also see errors like <code>RESERVATION CONFLICT</code> in dmesg if both paths are used simultaneously.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if you have duplicate serials (indicates missing alternate_pathing)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for dev in /dev/IBMtape[0-9]*; do [ -e "$dev" ] || continue; serial=$(udevadm info --query=property --name="$dev" 2&gt;/dev/null | grep 'ID_SCSI_SERIAL' | cut -d= -f2); echo "$dev: $serial"; done | sort -t: -k2 | uniq -d -f1</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>SP Integration — No Path Changes Required</h3>
+        <div class="callout callout-info">
+          <strong>Key point:</strong> Because lin_tape handles dual pathing at the driver level, the device files presented to IBM Storage Protect remain unchanged. Your existing <code>DEFINE PATH</code> and <code>DEFINE DRIVE</code> commands continue to work. If a path fails, failover is automatic and transparent — SP sees no interruption (the tape operation may briefly pause and then resume on the alternate path). No <code>UPDATE PATH</code> or <code>DELETE PATH / DEFINE PATH</code> commands are needed.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify SP paths still point to correct device files</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH FORMAT=DETAILED" | grep -E "Source Name|Destination Name|Device|Online"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check SP drive status (should remain ONLINE)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE *"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Simulate path failure test (check dmesg after pulling one FC cable)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dmesg | grep -i -E "lin_tape|failover|alternate|path" | tail -20</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Persistent Configuration for Dual Pathing</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Ensure modprobe config persists across reboots</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /etc/modprobe.d/lin_tape.conf</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Ensure lin_tape loads at boot</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /etc/modules-load.d/lin_tape.conf 2&gt;/dev/null || echo "lin_tape" &gt; /etc/modules-load.d/lin_tape.conf</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify boot persistence</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -r lin_tape /etc/modprobe.d/ /etc/modules-load.d/ 2&gt;/dev/null</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Reference Documentation</h3>
+        <ul class="ref-list">
+          <li><a href="https://www.ibm.com/support/pages/ibm-tape-device-drivers-installation-and-users-guide" target="_blank" rel="noopener noreferrer">IBM Tape Device Drivers Installation and User's Guide (latest)</a> — Chapter on alternate pathing and multipath</li>
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.27?topic=devices-multipath-io-access-tape" target="_blank" rel="noopener noreferrer">IBM Storage Protect — Multipath I/O access with tape devices</a></li>
+          <li><a href="https://www.ibm.com/docs/en/ts4300-tape-library?topic=lf-control-path-failover-data-path-failover-load-balancing" target="_blank" rel="noopener noreferrer">IBM Docs — Control path failover, data path failover, and load balancing</a></li>
+          <li><a href="https://www.ibm.com/docs/en/tslm/1.4.0?topic=reference-how-configure-device-files-scsi-media-changers-linux-platforms" target="_blank" rel="noopener noreferrer">Configuring device files for SCSI media changers on Linux</a></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 9. Storage Protect Configuration      -->
     <!-- ===================================== -->
     <section id="sp-config" class="section">
       <div class="section-title"><span>⚙️</span> Storage Protect Configuration</div>
@@ -1716,6 +1888,407 @@ echo " Output saved to: ${OUTFILE}"
 echo " Generated: $(date '+%F %T %Z')"
 echo "============================================="</pre>
         </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 14. Database Restore from Tape        -->
+    <!-- ===================================== -->
+    <section id="db-restore" class="section">
+      <div class="section-title"><span>🔄</span> Restore SP Database from Tape</div>
+      <p class="section-desc">Step-by-step disaster recovery procedure: restore the IBM Storage Protect server database from tape backups using <code>dsmserv restore db</code>. Covers preparing the volume history file, device configuration file, and the complete restore workflow. Linux only.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="db-restore">📋 Copy All Commands</button>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠️ Disaster Recovery Procedure:</strong> This section covers restoring the SP database — a destructive operation that replaces the current database. Only use this when recovering from a database loss, migrating to new hardware, or performing a planned DR test. The SP server <strong>must be stopped</strong> before starting a restore.
+      </div>
+
+      <div class="subsection">
+        <h3>Prerequisites &amp; Planning</h3>
+        <div class="callout callout-info">
+          <strong>You need three things to restore the SP database:</strong>
+          <ol style="margin-top:8px;padding-left:20px">
+            <li><strong>Volume History file</strong> (<code>volhist.out</code>) — Records which tapes/volumes contain your DB backups.</li>
+            <li><strong>Device Configuration file</strong> (<code>devconfig.out</code>) — Defines the tape library, drives, and paths the server uses.</li>
+            <li><strong>The physical backup tapes</strong> — The actual media referenced in the volume history.</li>
+          </ol>
+          <p style="margin-top:8px">These files should be backed up regularly and stored off-server. If they are lost, you may be able to reconstruct them, but this significantly complicates recovery.</p>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if volhist exists on this server</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /opt/tivoli/tsm/server/bin/volhist.out 2&gt;/dev/null; grep -i volumehistory /opt/tivoli/tsm/server/bin/dsmserv.opt 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if devconfig exists on this server</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /opt/tivoli/tsm/server/bin/devconfig.out 2&gt;/dev/null; grep -i devconfig /opt/tivoli/tsm/server/bin/dsmserv.opt 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check dsmserv.opt for file locations</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -iE "devconfig|volumehistory" /opt/tivoli/tsm/server/bin/dsmserv.opt 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Backup current volhist and devconfig (if available)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cp -v /opt/tivoli/tsm/server/bin/volhist.out /opt/tivoli/tsm/server/bin/volhist.out.bak.$(date +%Y%m%d) 2&gt;/dev/null; cp -v /opt/tivoli/tsm/server/bin/devconfig.out /opt/tivoli/tsm/server/bin/devconfig.out.bak.$(date +%Y%m%d) 2&gt;/dev/null</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Understanding the Volume History File</h3>
+        <div class="callout callout-info">
+          <strong>The volume history file</strong> tracks every sequential volume operation — most importantly, which tapes hold your database backup volumes. Each line records a backup type (<code>BACKUPFULL</code> or <code>BACKUPINCR</code>), timestamp, volume name (tape label), device class, and series/sequence numbers. The <code>dsmserv restore db</code> command reads this file to know which tapes to request for mounting.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">View the volume history file</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /opt/tivoli/tsm/server/bin/volhist.out 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Show only DB backup entries in volhist</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -i "BACKUPFULL\|BACKUPINCR" /opt/tivoli/tsm/server/bin/volhist.out 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Count full and incremental DB backups recorded</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">echo "Full backups: $(grep -ci BACKUPFULL /opt/tivoli/tsm/server/bin/volhist.out 2&gt;/dev/null)"; echo "Incremental backups: $(grep -ci BACKUPINCR /opt/tivoli/tsm/server/bin/volhist.out 2&gt;/dev/null)"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Find the most recent full DB backup entry</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -i BACKUPFULL /opt/tivoli/tsm/server/bin/volhist.out 2&gt;/dev/null | tail -1</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Copy volhist from another server (e.g., the server being rebuilt)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">scp user@old-sp-server:/opt/tivoli/tsm/server/bin/volhist.out /opt/tivoli/tsm/server/bin/volhist.out</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Backup volhist to a safe off-server location</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">scp /opt/tivoli/tsm/server/bin/volhist.out user@dr-fileserver:/backups/sp_dr/volhist.out.$(date +%Y%m%d)</pre>
+        </div>
+        <div class="callout callout-warn">
+          <strong>If you don't have the volhist file:</strong> You can attempt to reconstruct it manually if you know the tape labels and approximate dates of your last DB backups. IBM also provides a procedure to rebuild a missing volume history file — see <a href="https://www.ibm.com/support/pages/rebuild-missing-volume-history-file-file-database-restore" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">IBM Support: Rebuild a missing volume history file</a>. However, this is complex and error-prone. <strong>Always keep off-server copies of volhist.</strong>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Understanding the Device Configuration File</h3>
+        <div class="callout callout-info">
+          <strong>The device configuration file</strong> contains the <code>DEFINE LIBRARY</code>, <code>DEFINE DRIVE</code>, and <code>DEFINE PATH</code> statements that describe your tape hardware to the SP server. During a restore, <code>dsmserv</code> reads this file to know how to access the tape drives to read the backup tapes. If you're restoring on different hardware, you <strong>must edit this file</strong> to reflect the new device paths.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">View the device configuration file</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /opt/tivoli/tsm/server/bin/devconfig.out 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Show library definitions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -i "DEFINE LIBRARY" /opt/tivoli/tsm/server/bin/devconfig.out 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Show drive definitions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -i "DEFINE DRIVE" /opt/tivoli/tsm/server/bin/devconfig.out 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Show path definitions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">grep -i "DEFINE PATH" /opt/tivoli/tsm/server/bin/devconfig.out 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Copy devconfig from the server being rebuilt</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">scp user@old-sp-server:/opt/tivoli/tsm/server/bin/devconfig.out /opt/tivoli/tsm/server/bin/devconfig.out</pre>
+        </div>
+        <div class="callout callout-warn">
+          <strong>Editing devconfig for different hardware:</strong> If the restore target has different tape device paths (e.g., <code>/dev/IBMtape0</code> is now <code>/dev/IBMtape2</code>, or the library changer is on a different SCSI address), you must <strong>edit the <code>DEFINE PATH</code> lines</strong> to match. The library and drive names should stay the same, but the <code>DEVICE=</code> parameter must reflect the actual Linux device files on the restore server. Use <code>ls -la /dev/IBMtape* /dev/IBMchanger*</code> to find the correct device names.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Prepare the Server for Restore</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Stop the SP server (if running)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "HALT" 2&gt;/dev/null; sleep 5; systemctl stop dsmserv 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify server is stopped</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ps aux | grep -v grep | grep dsmserv</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Navigate to the SP instance directory</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cd /opt/tivoli/tsm/server/bin</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check/create required database directories</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /tsmdb001 /tsmdb002 /tsmdb003 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check/create required log directories</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /tsm_activelog /tsm_archlog /tsm_archfaillog 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Create directories if they don't exist</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">mkdir -p /tsmdb001 /tsmdb002 /tsmdb003 /tsm_activelog /tsm_archlog /tsm_archfaillog</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Set ownership (if using a tsminst user)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">chown -R tsminst1:tsmsrvrs /tsmdb001 /tsmdb002 /tsmdb003 /tsm_activelog /tsm_archlog /tsm_archfaillog 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Remove old database (if rebuilding from scratch)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmserv removedb TSMDB1</pre>
+        </div>
+        <div class="callout callout-error">
+          <strong>⛔ <code>dsmserv removedb</code> is destructive.</strong> Only run this if you are certain the existing database is unrecoverable or you are building a fresh server to restore onto. This command permanently removes the database.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Restore the Database</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Restore to the most recent state (latest full + all incrementals)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmserv restore db devconfig=devconfig.out volhistory=volhist.out</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Restore to a specific point in time</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmserv restore db todate=03/01/2026 totime=23:59:59 devconfig=devconfig.out volhistory=volhist.out</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Restore with explicit database directory list</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmserv restore db devconfig=devconfig.out volhistory=volhist.out dbdir=/tsmdb001,/tsmdb002,/tsmdb003</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Monitor the restore progress (in another terminal)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">tail -f /opt/tivoli/tsm/server/bin/dsmserv.log 2&gt;/dev/null</pre>
+        </div>
+        <div class="callout callout-info">
+          <strong>During the restore:</strong> The server will prompt you to mount specific tapes. Load the requested tape into the drive and press Enter (or let the library's automation handle it if the tapes are in the library). The restore reads the full backup first, then applies incrementals in order. This can take significant time depending on database size and tape speed.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Post-Restore Steps</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Start the SP server after successful restore</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cd /opt/tivoli/tsm/server/bin &amp;&amp; dsmserv</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Or start via systemd</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl start dsmserv</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify server is running</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY STATUS" 2&gt;/dev/null | head -10</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check database integrity</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DB FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check recovery log</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LOG FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify library and drives are operational</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBRARY"; dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE *"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check all paths are online</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Run audit of the library</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "AUDIT LIBRARY libraryname"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Run an immediate full DB backup after restore</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "BACKUP DB DEVCLASS=dbbackup_devclass TYPE=FULL WAIT=YES"</pre>
+        </div>
+        <div class="callout callout-info">
+          <strong>✅ After a successful restore:</strong> Immediately take a new full database backup. This establishes a new backup baseline on the restored server. Also verify that all storage pools, node registrations, and schedules are intact by running <code>QUERY STGPOOL</code>, <code>QUERY NODE *</code>, and <code>QUERY SCHEDULE * *</code>.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Complete DR Restore Script</h3>
+        <div class="callout callout-info">
+          <strong>Tip:</strong> This script automates the pre-flight checks and restore sequence. Edit the variables at the top to match your environment before running. It does NOT automatically start the restore — it pauses for your confirmation.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">IBM Storage Protect — Database Restore from Tape (DR script)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">#!/usr/bin/env bash
+# =============================================================
+# IBM Storage Protect — Database Restore from Tape
+# Disaster Recovery Script (Linux)
+# =============================================================
+set -euo pipefail
+
+# ---- EDIT THESE VARIABLES ----
+SP_INSTANCE_DIR="/opt/tivoli/tsm/server/bin"
+VOLHIST_FILE="${SP_INSTANCE_DIR}/volhist.out"
+DEVCONFIG_FILE="${SP_INSTANCE_DIR}/devconfig.out"
+DB_DIRS=("/tsmdb001" "/tsmdb002" "/tsmdb003")
+LOG_DIRS=("/tsm_activelog" "/tsm_archlog" "/tsm_archfaillog")
+SP_DB_NAME="TSMDB1"
+SP_USER="tsminst1"
+SP_GROUP="tsmsrvrs"
+# Set to specific date/time for point-in-time restore, or leave empty for latest
+RESTORE_TODATE=""    # e.g., "03/01/2026"
+RESTORE_TOTIME=""    # e.g., "23:59:59"
+# ---- END EDIT ----
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+info()    { echo -e "${CYAN}[INFO]${NC}  $*"; }
+success() { echo -e "${GREEN}[OK]${NC}    $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+fail()    { echo -e "${RED}[FAIL]${NC}  $*"; }
+
+echo "============================================="
+echo " IBM Storage Protect — DB Restore from Tape"
+echo " Host: $(hostname -f)"
+echo " Date: $(date '+%F %T %Z')"
+echo "============================================="
+echo ""
+
+# Check root
+if [[ $EUID -ne 0 ]]; then fail "Must run as root."; exit 1; fi
+
+# Check SP server is stopped
+if pgrep -x dsmserv &gt; /dev/null 2&gt;&amp;1; then
+    fail "SP server (dsmserv) is still running!"
+    warn "Stop it with: dsmadmc -id=ADMIN -pa=PASSWORD 'HALT'"
+    exit 1
+fi
+success "SP server is stopped."
+
+# Check volhist
+if [[ -f "$VOLHIST_FILE" ]]; then
+    success "Volume history file found: ${VOLHIST_FILE}"
+    info "  Full backups:  $(grep -ci BACKUPFULL "$VOLHIST_FILE" 2&gt;/dev/null || echo 0)"
+    info "  Incr backups:  $(grep -ci BACKUPINCR "$VOLHIST_FILE" 2&gt;/dev/null || echo 0)"
+    info "  Last full:     $(grep -i BACKUPFULL "$VOLHIST_FILE" 2&gt;/dev/null | tail -1)"
+else
+    fail "Volume history file NOT found: ${VOLHIST_FILE}"
+    warn "Copy it from the old server or a backup location."
+    exit 1
+fi
+
+# Check devconfig
+if [[ -f "$DEVCONFIG_FILE" ]]; then
+    success "Device config file found: ${DEVCONFIG_FILE}"
+    info "  Libraries: $(grep -ci 'DEFINE LIBRARY' "$DEVCONFIG_FILE" 2&gt;/dev/null || echo 0)"
+    info "  Drives:    $(grep -ci 'DEFINE DRIVE' "$DEVCONFIG_FILE" 2&gt;/dev/null || echo 0)"
+    info "  Paths:     $(grep -ci 'DEFINE PATH' "$DEVCONFIG_FILE" 2&gt;/dev/null || echo 0)"
+else
+    fail "Device config file NOT found: ${DEVCONFIG_FILE}"
+    warn "Copy it from the old server or a backup location."
+    exit 1
+fi
+
+# Check/create directories
+for d in "${DB_DIRS[@]}" "${LOG_DIRS[@]}"; do
+    if [[ -d "$d" ]]; then
+        success "Directory exists: $d"
+    else
+        warn "Creating directory: $d"
+        mkdir -p "$d"
+        chown "${SP_USER}:${SP_GROUP}" "$d" 2&gt;/dev/null || true
+    fi
+done
+
+# Check tape devices
+if ls /dev/IBMtape* &gt; /dev/null 2&gt;&amp;1; then
+    success "Tape devices found:"
+    ls -la /dev/IBMtape* 2&gt;/dev/null
+else
+    fail "No /dev/IBMtape* devices found. Ensure lin_tape is loaded and drives are visible."
+    exit 1
+fi
+
+echo ""
+echo "============================================="
+echo " PRE-FLIGHT CHECKS COMPLETE"
+echo "============================================="
+echo ""
+
+# Build restore command
+RESTORE_CMD="dsmserv restore db devconfig=${DEVCONFIG_FILE} volhistory=${VOLHIST_FILE}"
+if [[ -n "$RESTORE_TODATE" ]]; then
+    RESTORE_CMD="${RESTORE_CMD} todate=${RESTORE_TODATE}"
+    [[ -n "$RESTORE_TOTIME" ]] &amp;&amp; RESTORE_CMD="${RESTORE_CMD} totime=${RESTORE_TOTIME}"
+    info "Point-in-time restore: ${RESTORE_TODATE} ${RESTORE_TOTIME}"
+else
+    info "Restoring to most recent state (latest full + incrementals)."
+fi
+
+echo ""
+warn "RESTORE COMMAND:"
+echo "  ${RESTORE_CMD}"
+echo ""
+read -rp "    Proceed with restore? This will REPLACE the current database. [y/N]: " reply
+if [[ "${reply,,}" != "y" &amp;&amp; "${reply,,}" != "yes" ]]; then
+    info "Restore cancelled."
+    exit 0
+fi
+
+echo ""
+info "Starting restore..."
+cd "${SP_INSTANCE_DIR}"
+eval "${RESTORE_CMD}"
+
+echo ""
+echo "============================================="
+echo " Restore complete. Start the server with:"
+echo "   cd ${SP_INSTANCE_DIR} &amp;&amp; dsmserv"
+echo " Then verify with:"
+echo "   dsmadmc -id=ADMIN -pa=PASSWORD 'QUERY STATUS'"
+echo "   dsmadmc -id=ADMIN -pa=PASSWORD 'QUERY DB F=D'"
+echo "============================================="</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Reference Documentation</h3>
+        <ul class="ref-list">
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.26?topic=drdrd-dsmserv-restore-db-restore-database-its-most-current-state" target="_blank" rel="noopener noreferrer">IBM Docs — DSMSERV RESTORE DB (most current state)</a></li>
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.26?topic=drdrd-dsmserv-restore-db-restore-database-point-in-time" target="_blank" rel="noopener noreferrer">IBM Docs — DSMSERV RESTORE DB (point-in-time)</a></li>
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.26?topic=rfdlso-restoring-database" target="_blank" rel="noopener noreferrer">IBM Docs — Restoring the database (overview)</a></li>
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.0?topic=commands-backup-volhistory-save-sequential-volume-history-information" target="_blank" rel="noopener noreferrer">IBM Docs — BACKUP VOLHISTORY command</a></li>
+          <li><a href="https://www.ibm.com/docs/en/storage-protect/8.1.2?topic=options-volumehistory" target="_blank" rel="noopener noreferrer">IBM Docs — VOLUMEHISTORY server option</a></li>
+          <li><a href="https://www.ibm.com/support/pages/rebuild-missing-volume-history-file-file-database-restore" target="_blank" rel="noopener noreferrer">IBM Support — Rebuild a missing volume history file</a></li>
+          <li><a href="https://www.ibm.com/support/pages/recommended-dsmserv-restore-db-point-time-procedure" target="_blank" rel="noopener noreferrer">IBM Support — Recommended DSMSERV RESTORE DB point-in-time procedure</a></li>
+        </ul>
       </div>
     </section>
 
