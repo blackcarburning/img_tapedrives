@@ -409,6 +409,7 @@
       <li data-section="failover"><a href="#failover"><span class="nav-icon">🔀</span><span class="nav-label">Dual-Path Failover</span></a></li>
       <li data-section="verification"><a href="#verification"><span class="nav-icon">✅</span><span class="nav-label">Verification &amp; Testing</span></a></li>
       <li data-section="diagnostics"><a href="#diagnostics"><span class="nav-icon">🏥</span><span class="nav-label">Diagnostics &amp; Troubleshooting</span></a></li>
+      <li data-section="document-system"><a href="#document-system"><span class="nav-icon">📋</span><span class="nav-label">Document Existing System</span></a></li>
     </ul>
   </nav>
 
@@ -1213,6 +1214,507 @@ dmesg | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20</pre>
           <div class="cmd-label">Check all lin_tape systemd service statuses</div>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">systemctl status lin_tape lin_taped lin_tape_load 2&gt;/dev/null</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- 12. Document Existing System          -->
+    <!-- ===================================== -->
+    <section id="document-system" class="section">
+      <div class="section-title"><span>📋</span> Document Existing System</div>
+      <p class="section-desc">Commands to capture and document the complete configuration of an existing IBM Storage Protect tape library environment. Run these to produce a comprehensive system snapshot for audit, DR planning, migration, or handover documentation.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="document-system">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>Linux — System &amp; Hardware</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">OS release</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /etc/redhat-release</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Kernel version</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">uname -a</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Hostname and network identity</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">hostname -f &amp;&amp; ip addr show | grep "inet " | grep -v 127.0.0.1</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">CPU and memory summary</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lscpu | head -15 &amp;&amp; echo "" &amp;&amp; free -h</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Installed lin_tape packages</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rpm -qa | grep -i lin_tape</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">lin_tape module info</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">modinfo lin_tape 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">lin_tape module parameters</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/module/lin_tape/parameters/* 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Alternate pathing status</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/module/lin_tape/parameters/alternate_pathing 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">lin_taped daemon status</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl status lin_taped 2&gt;/dev/null; pgrep -a lin_taped</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Boot persistence config</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /etc/modules-load.d/lin_tape.conf 2&gt;/dev/null; echo "---"; cat /etc/modprobe.d/lin_tape.conf 2&gt;/dev/null; echo "---"; cat /etc/modprobe.d/blacklist-tape-generic.conf 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">systemd service status</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl is-enabled lin_tape lin_taped lin_tape_load 2&gt;/dev/null; systemctl list-unit-files | grep -i lin_tape</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Linux — Tape Devices &amp; Paths</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">All IBM tape device nodes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/IBMtape* /dev/IBMchanger* 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Persistent symlinks</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/tsmtape/ 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Resolve symlink targets</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for link in /dev/tsmtape/*; do [ -L "$link" ] &amp;&amp; echo "$link -&gt; $(readlink -f $link)"; done 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">SCSI device list</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lsscsi -g 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">udev rules for tape</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /etc/udev/rules.d/99-ibm-tape-persist.rules 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Device serial numbers</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for dev in /dev/IBMtape[0-9]*; do [ -e "$dev" ] || continue; serial=$(udevadm info --query=property --name="$dev" 2&gt;/dev/null | grep -E 'ID_SCSI_SERIAL|ID_SERIAL_SHORT' | head -1); echo "$dev: $serial"; done</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Device udev properties (all devices)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for dev in /dev/IBMtape[0-9]* /dev/IBMchanger[0-9]*; do [ -e "$dev" ] || continue; echo "=== $dev ==="; udevadm info --query=property --name="$dev" 2&gt;/dev/null; echo ""; done</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">FC HBA ports and WWPNs</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for h in /sys/class/fc_host/host*; do [ -d "$h" ] || continue; echo "$(basename $h): WWPN=$(cat $h/port_name 2&gt;/dev/null) State=$(cat $h/port_state 2&gt;/dev/null) Speed=$(cat $h/speed 2&gt;/dev/null)"; done</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">FC remote ports (targets)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for rport in /sys/class/fc_remote_ports/rport-*; do [ -d "$rport" ] || continue; echo "$(basename $rport): WWPN=$(cat $rport/port_name 2&gt;/dev/null) State=$(cat $rport/port_state 2&gt;/dev/null)"; done 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">SCSI host adapters</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls /sys/class/scsi_host/ 2&gt;/dev/null &amp;&amp; for h in /sys/class/scsi_host/host*; do echo "$(basename $h): model=$(cat $h/model_name 2&gt;/dev/null) state=$(cat $h/state 2&gt;/dev/null)"; done</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">/proc tape info</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /proc/scsi/IBMtape 2&gt;/dev/null || echo "(not available)"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Kernel messages (tape)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dmesg | grep -i -E "tape|IBMtape|lin_tape|changer|scsi" | tail -30</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Spectrum Protect — Server &amp; Instance</h3>
+        <div class="callout callout-info">
+          <strong>ℹ Note:</strong> Replace <code>ADMIN</code> and <code>PASSWORD</code> with your actual SP credentials. These commands use <code>dsmadmc</code> (the SP admin CLI). Add <code>-comma</code> for CSV-friendly output or <code>-tab</code> for tab-delimited.
+        </div>
+        <div class="callout callout-warn">
+          <strong>⚠ Security:</strong> Avoid passing passwords on the command line in production — they appear in shell history and process listings. Prefer a <code>~/.dsmadmc</code> options file or set <code>DSMI_CONFIG</code> to a protected dsm.opt that stores credentials. If you must use inline credentials, run <code>history -d $(history 1)</code> afterwards to remove the entry from your shell history.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">SP server name and version</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD -dataonly=yes "QUERY STATUS" | head -20</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">SP server overview</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY STATUS FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Database utilization</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DB FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Recovery log utilization</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LOG FORMAT=DETAILED"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Spectrum Protect — Library Configuration</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">All defined libraries</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBRARY FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Library inventory (volumes)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBVOLUME * FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">All defined drives</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE * FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Drive status (online/offline)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE *"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">All defined paths</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Path summary (quick view)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Spectrum Protect — Storage Configuration</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">All device classes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DEVCLASS FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Tape device classes only</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DEVCLASS * DEVTYPE=LTO FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">All storage pools</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY STGPOOL FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Storage pool hierarchy</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY STGPOOL * FORMAT=DETAILED" | grep -E "Storage Pool Name|Next Storage Pool|Device Class Name|Estimated Capacity|Pct Util"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Storage pool volumes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY VOLUME * STGPOOL=LTO_POOL"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Scratch volumes available</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBVOLUME * STATUS=Scratch"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">All volumes and their status</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY VOLUME * FORMAT=DETAILED" | grep -E "Volume Name|Storage Pool|Status|Pct Util|Access"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Spectrum Protect — Policies &amp; Schedules</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Policy domains</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DOMAIN * FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Policy sets and management classes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY MGMTCLASS * * FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Copy groups</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY COPYGROUP * * * FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Admin schedules</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY SCHEDULE * TYPE=ADMIN FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Client schedules</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY SCHEDULE * * TYPE=CLIENT FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Recent activity log (24h)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY ACTLOG BEGINDATE=TODAY-1 ENDDATE=TODAY" | tail -50</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Spectrum Protect — Operations &amp; Activity</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Active sessions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY SESSION FORMAT=DETAILED"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Running processes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PROCESS"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Recent activity log</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY ACTLOG BEGINDATE=TODAY ENDDATE=TODAY" | tail -100</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Mount requests</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY MOUNT"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Drive operations (current)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY REQUEST"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Event summary (last 24h)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY EVENT * * BEGINDATE=TODAY-1 ENDDATE=TODAY FORMAT=DETAILED" | tail -50</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Node registrations</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY NODE * FORMAT=DETAILED" | grep -E "Node Name|Platform|Policy Domain|Last Access"</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Full System Documentation Script</h3>
+        <div class="callout callout-info">
+          <strong>💡 Tip:</strong> Copy and run this complete script to generate a full system documentation file. It captures all Linux and SP configuration into a single timestamped report.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">IBM Storage Protect — Full System Documentation Script</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">#!/usr/bin/env bash
+# =============================================================
+# IBM Storage Protect — Full System Documentation Script
+# Captures complete tape library configuration snapshot
+# =============================================================
+OUTFILE="sp_system_doc_$(hostname)_$(date +%Y%m%d_%H%M%S).txt"
+SP_USER="ADMIN"
+SP_PASS="PASSWORD"
+
+# Validate that credentials have been updated from placeholder values
+if [ "$SP_USER" = "ADMIN" ] && [ "$SP_PASS" = "PASSWORD" ]; then
+    echo "ERROR: Update SP_USER and SP_PASS with real credentials before running this script." >&2
+    exit 1
+fi
+
+exec &gt; &gt;(tee -a "$OUTFILE") 2&gt;&amp;1
+
+echo "============================================="
+echo " IBM Storage Protect — System Documentation"
+echo " Host: $(hostname -f)"
+echo " Date: $(date '+%F %T %Z')"
+echo "============================================="
+echo ""
+
+echo "=== OS &amp; KERNEL ==="
+cat /etc/redhat-release 2&gt;/dev/null
+uname -a
+echo ""
+
+echo "=== CPU &amp; MEMORY ==="
+lscpu | head -15
+free -h
+echo ""
+
+echo "=== INSTALLED TAPE PACKAGES ==="
+rpm -qa | grep -i lin_tape
+echo ""
+
+echo "=== LIN_TAPE MODULE ==="
+lsmod | grep lin_tape
+modinfo lin_tape 2&gt;/dev/null | head -15
+echo ""
+
+echo "=== MODULE PARAMETERS ==="
+for p in /sys/module/lin_tape/parameters/*; do
+    [ -f "$p" ] &amp;&amp; echo "$(basename $p) = $(cat $p)"
+done 2&gt;/dev/null
+echo ""
+
+echo "=== BOOT PERSISTENCE ==="
+echo "--- /etc/modules-load.d/lin_tape.conf ---"
+cat /etc/modules-load.d/lin_tape.conf 2&gt;/dev/null || echo "(not found)"
+echo "--- /etc/modprobe.d/lin_tape.conf ---"
+cat /etc/modprobe.d/lin_tape.conf 2&gt;/dev/null || echo "(not found)"
+echo "--- /etc/modprobe.d/blacklist-tape-generic.conf ---"
+cat /etc/modprobe.d/blacklist-tape-generic.conf 2&gt;/dev/null || echo "(not found)"
+echo ""
+
+echo "=== SYSTEMD SERVICES ==="
+systemctl is-enabled lin_tape lin_taped lin_tape_load 2&gt;/dev/null
+systemctl status lin_taped --no-pager 2&gt;/dev/null | head -10
+echo ""
+
+echo "=== TAPE DEVICES ==="
+ls -la /dev/IBMtape* /dev/IBMchanger* 2&gt;/dev/null || echo "(no devices)"
+echo ""
+
+echo "=== PERSISTENT SYMLINKS ==="
+ls -la /dev/tsmtape/ 2&gt;/dev/null || echo "(no symlinks)"
+echo ""
+
+echo "=== UDEV RULES ==="
+cat /etc/udev/rules.d/99-ibm-tape-persist.rules 2&gt;/dev/null || echo "(no rules file)"
+echo ""
+
+echo "=== DEVICE SERIALS ==="
+for dev in /dev/IBMtape[0-9]* /dev/IBMchanger[0-9]*; do
+    [ -e "$dev" ] || continue
+    serial=$(udevadm info --query=property --name="$dev" 2&gt;/dev/null | grep -E 'ID_SCSI_SERIAL|ID_SERIAL_SHORT' | head -1)
+    echo "$dev: $serial"
+done
+echo ""
+
+echo "=== SCSI DEVICES ==="
+lsscsi -g 2&gt;/dev/null || echo "(lsscsi not installed)"
+echo ""
+
+echo "=== FC HBA PORTS ==="
+for h in /sys/class/fc_host/host*; do
+    [ -d "$h" ] || continue
+    echo "$(basename $h): WWPN=$(cat $h/port_name 2&gt;/dev/null) State=$(cat $h/port_state 2&gt;/dev/null) Speed=$(cat $h/speed 2&gt;/dev/null)"
+done
+echo ""
+
+echo "=== FC REMOTE PORTS ==="
+for rport in /sys/class/fc_remote_ports/rport-*; do
+    [ -d "$rport" ] || continue
+    echo "$(basename $rport): WWPN=$(cat $rport/port_name 2&gt;/dev/null) State=$(cat $rport/port_state 2&gt;/dev/null)"
+done 2&gt;/dev/null
+echo ""
+
+echo "=== DMESG (TAPE) ==="
+dmesg | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -30
+echo ""
+
+echo "============================================="
+echo " SPECTRUM PROTECT SERVER CONFIGURATION"
+echo "============================================="
+DSMADMC="dsmadmc -id=${SP_USER} -pa=${SP_PASS} -dataonly=yes"
+echo ""
+
+echo "=== SP SERVER STATUS ==="
+$DSMADMC "QUERY STATUS" 2&gt;&amp;1 | head -30
+echo ""
+
+echo "=== LIBRARIES ==="
+$DSMADMC "QUERY LIBRARY FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== DRIVES ==="
+$DSMADMC "QUERY DRIVE * FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== PATHS ==="
+$DSMADMC "QUERY PATH FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== DEVICE CLASSES ==="
+$DSMADMC "QUERY DEVCLASS FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== STORAGE POOLS ==="
+$DSMADMC "QUERY STGPOOL FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== LIBRARY VOLUMES ==="
+$DSMADMC "QUERY LIBVOLUME *" 2&gt;&amp;1
+echo ""
+
+echo "=== SCRATCH VOLUMES ==="
+$DSMADMC "QUERY LIBVOLUME * STATUS=Scratch" 2&gt;&amp;1
+echo ""
+
+echo "=== POLICY DOMAINS ==="
+$DSMADMC "QUERY DOMAIN * FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== MANAGEMENT CLASSES ==="
+$DSMADMC "QUERY MGMTCLASS * * FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== COPY GROUPS ==="
+$DSMADMC "QUERY COPYGROUP * * * FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== ADMIN SCHEDULES ==="
+$DSMADMC "QUERY SCHEDULE * TYPE=ADMIN FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== CLIENT SCHEDULES ==="
+$DSMADMC "QUERY SCHEDULE * * TYPE=CLIENT FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== DATABASE ==="
+$DSMADMC "QUERY DB FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== RECOVERY LOG ==="
+$DSMADMC "QUERY LOG FORMAT=DETAILED" 2&gt;&amp;1
+echo ""
+
+echo "=== REGISTERED NODES ==="
+$DSMADMC "QUERY NODE * FORMAT=DETAILED" 2&gt;&amp;1 | grep -E "Node Name|Platform|Policy Domain|Last Access"
+echo ""
+
+echo "============================================="
+echo " Documentation complete."
+echo " Output saved to: ${OUTFILE}"
+echo " Generated: $(date '+%F %T %Z')"
+echo "============================================="</pre>
         </div>
       </div>
     </section>
