@@ -228,8 +228,8 @@ EOF
     info "Step 1e: Enable lin_tape systemd service (if the RPM ships one)"
     print_commands <<'EOF'
 if systemctl list-unit-files | grep -qE "^lin_tape\.service"; then
-    systemctl enable lin_tape
-    systemctl start lin_tape
+    sudo systemctl enable lin_tape && echo "lin_tape service enabled" || echo "WARNING: failed to enable lin_tape service"
+    sudo systemctl start lin_tape && echo "lin_tape service started" || echo "WARNING: failed to start lin_tape service"
 fi
 EOF
 
@@ -419,7 +419,8 @@ check() {
 }
 
 check "lin_taped RPM installed"               rpm -qa | grep -qi lin_taped
-check "lin_taped process running"             bash -c 'pgrep -x lin_taped || systemctl is-active lin_taped'
+check "lin_taped process running (pgrep)"     pgrep -x lin_taped
+check "lin_taped service active (systemctl)"  systemctl is-active lin_taped
 check "lin_taped enabled at boot"             systemctl is-enabled lin_taped
 check "/dev/IBMtape* devices present"         ls /dev/IBMtape*
 check "/dev/IBMchanger* devices present"      ls /dev/IBMchanger*
@@ -1315,7 +1316,7 @@ menu_check_existing() {
     echo "─────────────────────────────────────────"
 
     echo "[INFO] Kernel: $(uname -r)"
-    echo "[INFO] OS: $(cat /etc/redhat-release 2>/dev/null || grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 || echo "(OS information not available)")"
+    echo "[INFO] OS: $(cat /etc/redhat-release 2>/dev/null || grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "(OS information not available)")"
     echo "[INFO] Recent dmesg (tape/lin_tape related):"
     dmesg 2>/dev/null | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20 || echo "       (none or dmesg not available)"
 
