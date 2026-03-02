@@ -20,7 +20,7 @@ set -euo pipefail
 #---------------------------------------
 # GLOBALS (collected interactively)
 #---------------------------------------
-SCRIPT_DIR="$(cd ""$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="${SCRIPT_DIR}/sp_tape_setup_output"
 SYMLINK_BASE="/dev/tsmtape"
 
@@ -283,8 +283,8 @@ EOF
     print_commands <<'EOF'
 for host_dir in /sys/class/fc_host/host*; do
     host=$(basename "$host_dir")
-    wwpn=$(cat "");
-state=$(cat "$host_dir/port_state" 2>/dev/null);
+    wwpn=$(cat "${host_dir}/port_name" 2>/dev/null);
+    state=$(cat "$host_dir/port_state" 2>/dev/null);
 echo "  ${host}: WWPN=${wwpn}  State=${state}"
 done
 EOF
@@ -473,10 +473,10 @@ if ls -la "\$SYMLINK_DIR/" 2>/dev/null; then
             ((FAIL++));
         fi
     done;
-} else {
+else
     echo "[FAIL] No symlinks found in \${SYMLINK_DIR}/";
     ((FAIL++));
-}
+fi
 
 echo ""
 echo "Reboot test: reboot the server, then re-run this script.";
@@ -551,8 +551,13 @@ phase4_sp_config() {
     echo -e "${GREEN}${sp_script}${NC}"
     echo -e "${DIM}└──────────────────────────────────────────────────────────────┘${NC}"
 
-    # Save to file
-    echo -e "$sp_script" | write_file "sp_configure_library.dsmadmc"
+    # Save to file — strip C-style block comment lines so dsmadmc gets clean commands
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*/\* ]] && continue
+        [[ "$line" =~ ^[[:space:]]*\*/ ]] && continue
+        [[ "$line" =~ ^[[:space:]]*\* ]] && continue
+        echo "$line"
+    done <<< "$(echo -e "$sp_script")" | write_file "sp_configure_library.dsmadmc"
 
     echo ""
     info "How to run these commands:"
@@ -601,10 +606,10 @@ run_check() {
         echo "[PASS] \${desc}"
         echo "       \$(echo "\$output" | head -3)";
         ((PASS++));
-    } else {
+    else
         echo "[FAIL] \${desc}"
         ((FAIL++));
-    }
+    fi
     echo "";
 }
 
@@ -766,10 +771,10 @@ check() {
     if "\$@" &>/dev/null; then
         echo "[PASS] \${desc}"
         ((PASS++));
-    } else {
+    else
         echo "[FAIL] \${desc}"
         ((FAIL++));
-    }
+    fi
 }
 
 section() {
@@ -809,10 +814,10 @@ sp_check() {
     if [[ \$? -eq 0 ]] && [[ -n "\$output" ]]; then
         echo "[PASS] \${desc}"
         ((PASS++));
-    } else {
+    else
         echo "[FAIL] \${desc}"
         ((FAIL++));
-    }
+    fi
 }
 
 sp_check "Library \${LIB_NAME}"               "QUERY LIBRARY \${LIB_NAME}";
@@ -826,10 +831,10 @@ echo "[INFO] Drive paths found: \${path_count}";
 if [[ \$path_count -ge $(( NUM_DRIVES * 2 )) ]]; then
     echo "[PASS] Expected $((NUM_DRIVES * 2)) drive paths for ${NUM_DRIVES} dual-pathed drives";
     ((PASS++));
-} else {
+else
     echo "[WARN] Expected $((NUM_DRIVES * 2)) paths, found \${path_count}";
     ((WARN++));
-}
+fi
 
 # ── Section 4: Operational ────────────────────────────────────
 section "4. OPERATIONAL"
@@ -839,10 +844,10 @@ if [[ \$? -eq 0 ]] && [[ -n "\$vol_output" ]]; then
     echo "[PASS] Library inventory query succeeded";
     echo "       \$(echo "\$vol_output" | head -5)";
     ((PASS++));
-} else {
+else
     echo "[WARN] Library inventory empty (check in scratch tapes)";
     ((WARN++));
-}
+fi
 
 # ── Summary ──────────────────────────────────────────────────
 echo "";
@@ -875,7 +880,7 @@ phase7_master() {
 #===============================================================================
 set -uo pipefail
 
-SCRIPT_DIR="$(cd ""$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOTAL_PASS=0
 TOTAL_FAIL=0
 
@@ -907,10 +912,10 @@ echo "└───────────────────────�
     if [[ $rc -eq 0 ]]; then
         echo ">>> ${test_name}: ALL PASSED";
         ((TOTAL_PASS++));
-    } else {
+    else
         echo ">>> ${test_name}: FAILURES (exit code ${rc})";
         ((TOTAL_FAIL++));
-    }
+    fi
 }
 
 run_test "${SCRIPT_DIR}/test_01_lin_tape.sh";
