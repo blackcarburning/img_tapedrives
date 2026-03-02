@@ -17,6 +17,42 @@
 
 set -euo pipefail
 
+# REFERENCE DOCUMENTATION (verified 2025–2026):
+#
+# lin_tape Driver:
+#   - IBM Tape Device Drivers Installation and User's Guide (Oct 2025):
+#     https://www.ibm.com/support/pages/system/files/inline-files/IBM%20Tape%20Device%20Drivers%20and%20Diagnostic%20Tool%20User%27s%20Guide%2020251029.pdf
+#   - IBM lin_tape ReadMe (latest):
+#     https://delivery04.dhe.ibm.com/sar/CMA/STA/0ce5b/0/lin_tape.ReadMe
+#   - IBM lin_tape Fix List / Release Notes:
+#     https://delivery04.dhe.ibm.com/sar/CMA/STA/0d9la/1/lin_tape.fixlist
+#   - IBM lin_taped Daemon ReadMe:
+#     https://delivery04.dhe.ibm.com/sar/CMA/STA/0ciye/0/lin_tape_daemon.txt
+#   - Installing the lin_tape device driver (IBM Support):
+#     https://www.ibm.com/support/pages/installing-lintape-device-driver
+#   - IBM Fix Central — Tape Device Drivers Download:
+#     https://public.dhe.ibm.com/storage/devdrvr/IBM_Fix_Central_Site.html
+#
+# Dual Pathing / Multipath:
+#   - IBM Storage Protect 8.1.27 Tape Solution Guide:
+#     https://www.ibm.com/docs/en/SSEQVQ_8.1.27/pdf/b_tape_solution.pdf
+#   - Multipath I/O access with IBM tape devices (SP 8.1.27):
+#     https://www.ibm.com/docs/en/storage-protect/8.1.27?topic=devices-multipath-io-access-tape
+#   - Control Path Failover, Data Path Failover, and Load Balancing:
+#     https://www.ibm.com/docs/en/ts4300-tape-library?topic=lf-control-path-failover-data-path-failover-load-balancing
+#
+# Tape Library Guides:
+#   - IBM Tape Library Guide for Open Systems (Redbook, Aug 2024):
+#     https://www.redbooks.ibm.com/redbooks/pdfs/sg245946.pdf
+#   - IBM Tape Device Drivers Installation and User's Guide (main page):
+#     https://www.ibm.com/support/pages/ibm-tape-device-drivers-installation-and-users-guide
+#
+# RHEL / systemd:
+#   - RHEL 8 Managing systemd:
+#     https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings
+#   - How to configure device files for SCSI media changers on Linux:
+#     https://www.ibm.com/docs/en/tslm/1.4.0?topic=reference-how-configure-device-files-scsi-media-changers-linux-platforms
+
 #---------------------------------------
 # GLOBALS (collected interactively)
 #---------------------------------------
@@ -172,6 +208,16 @@ EOF
 echo "lin_tape" | sudo tee /etc/modules-load.d/lin_tape.conf
 EOF
 
+    info "Step 1c2: Create modprobe options for lin_tape (enables alternate/dual pathing)"
+    info "  alternate_pathing=1 tells lin_tape to expose each physical drive via BOTH"
+    info "  FC HBA paths as separate /dev/IBMtape* nodes, enabling SP dual-path failover."
+    info "  Only set this if you have dual FC HBAs connected to the library."
+    print_commands <<'EOF'
+sudo tee /etc/modprobe.d/lin_tape.conf <<'CONF'
+options lin_tape alternate_pathing=1
+CONF
+EOF
+
     info "Step 1d: Unload generic drivers (if loaded) and load lin_tape"
     print_commands <<'EOF'
 sudo rmmod st 2>/dev/null; true
@@ -179,12 +225,41 @@ sudo rmmod sg 2>/dev/null; true
 sudo modprobe lin_tape
 EOF
 
-    info "Step 1e: Rebuild initramfs so blacklist persists across reboots"
+    info "Step 1e: Enable lin_tape systemd service (if the RPM ships one)"
     print_commands <<'EOF'
-sudo dracut --force
+if systemctl list-unit-files | grep -qE "^lin_tape\.service"; then
+    systemctl enable lin_tape
+    systemctl start lin_tape
+fi
 EOF
 
-    info "Step 1f: Verify"
+    info "Step 1f: Create a fallback systemd service to load lin_tape at boot"
+    info "This is used when the RPM does not ship its own unit file."
+    print_commands <<'EOF'
+sudo tee /etc/systemd/system/lin_tape_load.service <<'UNIT'
+[Unit]
+Description=Load IBM lin_tape kernel module
+After=systemd-modules-load.service
+Before=lin_taped.service
+# Note: systemd ignores Before/After for units that do not exist; safe if lin_taped is absent.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/modprobe lin_tape
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+sudo systemctl daemon-reload && sudo systemctl enable lin_tape_load.service
+EOF
+
+    info "Step 1g: Rebuild initramfs so blacklist and lin_tape driver persist across reboots"
+    print_commands <<'EOF'
+sudo dracut --add-drivers "lin_tape" --force
+EOF
+
+    info "Step 1h: Verify"
     print_commands <<'EOF'
 lsmod | grep lin_tape
 ls -la /dev/IBMtape*
@@ -220,6 +295,9 @@ check "st driver is NOT loaded"               bash -c '! lsmod | grep -q "^st "'
 check "sg driver is NOT loaded"               bash -c '! lsmod | grep -q "^sg "'
 check "Blacklist file exists"                 test -f /etc/modprobe.d/blacklist-tape-generic.conf
 check "modules-load.d entry exists"           test -f /etc/modules-load.d/lin_tape.conf
+check "modprobe options file exists"          test -f /etc/modprobe.d/lin_tape.conf
+check "alternate_pathing option configured"   grep -q "alternate_pathing" /etc/modprobe.d/lin_tape.conf
+check "lin_tape or lin_tape_load service enabled" bash -c 'systemctl is-enabled lin_tape 2>/dev/null || systemctl is-enabled lin_tape_load 2>/dev/null'
 check "/dev/IBMtape* devices present"         ls /dev/IBMtape*
 check "/dev/IBMchanger* devices present"      ls /dev/IBMchanger*
 
@@ -245,11 +323,131 @@ TESTSCRIPT
 }
 
 #===============================================================================
-# PHASE 2 — DEVICE DISCOVERY
+# PHASE 2 — LIN_TAPED DAEMON SETUP
 #===============================================================================
 
-phase2_discovery() {
-    banner "PHASE 2 — DEVICE DISCOVERY"
+phase2_lin_taped() {
+    banner "PHASE 2 — IBM lin_taped DAEMON SETUP"
+
+    info "lin_taped is the IBM tape daemon that manages device nodes (/dev/IBMtape*,"
+    info "/dev/IBMchanger*), provides control path failover, data path failover,"
+    info "and load balancing features."
+    echo ""
+    warn "lin_taped must be stopped BEFORE unloading the lin_tape kernel module."
+    warn "  (rmmod lin_tape will fail if lin_taped is running)"
+    echo ""
+
+    info "Step 2a: Check if lin_taped RPM is installed"
+    print_commands <<'EOF'
+rpm -qa | grep -i lin_taped
+EOF
+
+    info "If lin_taped is not installed, download it from IBM Fix Central alongside the lin_tape RPM."
+    info "Install it with:"
+    print_commands <<'EOF'
+sudo rpm -ivh lin_taped-*.rpm
+EOF
+
+    info "Step 2b: Start lin_taped"
+    print_commands <<'EOF'
+# Preferred (systemd):
+sudo systemctl start lin_taped
+
+# Legacy fallback (if systemd unit not available):
+# sudo lin_taped start
+EOF
+
+    info "Step 2c: Enable lin_taped at boot"
+    print_commands <<'EOF'
+sudo systemctl enable lin_taped
+EOF
+
+    info "Step 2d: Check lin_taped status"
+    print_commands <<'EOF'
+sudo systemctl status lin_taped
+# or: lin_taped status
+EOF
+
+    info "Step 2e: Stop lin_taped (for maintenance / before rmmod)"
+    print_commands <<'EOF'
+sudo systemctl stop lin_taped
+# or: sudo lin_taped stop
+EOF
+
+    info "Step 2f: Restart lin_taped (e.g., after adding/removing tape devices)"
+    print_commands <<'EOF'
+sudo systemctl restart lin_taped
+# or: sudo lin_taped restart
+EOF
+
+    info "Step 2g: Reload lin_tape module and restart lin_taped (after hardware changes)"
+    warn "Only do this when no backup jobs are running."
+    print_commands <<'EOF'
+sudo systemctl stop lin_taped
+sudo rmmod lin_tape
+sudo modprobe lin_tape
+sudo systemctl start lin_taped
+EOF
+
+    info "KEY NOTES:"
+    info "  • lin_taped handles device node creation/deletion for /dev/IBMtape* and /dev/IBMchanger*"
+    info "  • lin_taped provides control path failover and data path failover features"
+    info "  • If tape devices are added or removed, reload lin_tape module and restart lin_taped"
+    info "  • lin_taped must be stopped before unloading lin_tape (rmmod lin_tape)"
+
+    # Generate test script
+    write_file "test_02_lin_taped.sh" <<'TESTSCRIPT'
+#!/usr/bin/env bash
+#===============================================================================
+# TEST 02 — lin_taped Daemon Verification
+#===============================================================================
+echo "============================================="
+echo " TEST 02 — LIN_TAPED DAEMON"
+echo "============================================="
+
+PASS=0; FAIL=0
+
+check() {
+    local desc="$1"; shift
+    if "$@" &>/dev/null; then
+        echo "[PASS] ${desc}"
+        ((PASS++))
+    else
+        echo "[FAIL] ${desc}"
+        ((FAIL++))
+    fi
+}
+
+check "lin_taped RPM installed"               rpm -qa | grep -qi lin_taped
+check "lin_taped process running"             bash -c 'pgrep -x lin_taped || systemctl is-active lin_taped'
+check "lin_taped enabled at boot"             systemctl is-enabled lin_taped
+check "/dev/IBMtape* devices present"         ls /dev/IBMtape*
+check "/dev/IBMchanger* devices present"      ls /dev/IBMchanger*
+
+echo ""
+echo "--- lin_taped systemd status ---"
+systemctl status lin_taped 2>/dev/null | head -10 || echo "(systemd unit not found)"
+echo ""
+echo "--- /dev/IBMtape* ---"
+ls -la /dev/IBMtape*  2>/dev/null || echo "(none found)"
+echo ""
+echo "--- /dev/IBMchanger* ---"
+ls -la /dev/IBMchanger*  2>/dev/null || echo "(none found)"
+echo ""
+echo "Results: ${PASS} passed, ${FAIL} failed."
+[[ $FAIL -eq 0 ]] && echo "All lin_taped checks PASSED." || echo "Some checks FAILED."
+exit $FAIL
+TESTSCRIPT
+
+    pause;
+}
+
+#===============================================================================
+# PHASE 3 — DEVICE DISCOVERY
+#===============================================================================
+
+phase3_discovery() {
+    banner "PHASE 3 — DEVICE DISCOVERY"
 
     info "After lin_tape is loaded, run these commands to discover your devices"
     info "and gather the attributes needed for persistent udev rules."
@@ -302,13 +500,13 @@ EOF
     info "  • Serial number of the changer device"
 
     # Generate test script
-    write_file "test_02_discovery.sh" <<'TESTSCRIPT'
+    write_file "test_03_discovery.sh" <<'TESTSCRIPT'
 #!/usr/bin/env bash
 #===============================================================================
-# TEST 02 — Device Discovery & Attribute Dump
+# TEST 03 — Device Discovery & Attribute Dump
 #===============================================================================
 echo "============================================="
-echo " TEST 02 — DEVICE DISCOVERY"
+echo " TEST 03 — DEVICE DISCOVERY"
 echo "============================================="
 echo ""
 echo "--- Tape Devices ---"
@@ -350,11 +548,11 @@ TESTSCRIPT
 }
 
 #===============================================================================
-# PHASE 3 — PERSISTENT DEVICE BINDING (udev RULES)
+# PHASE 4 — PERSISTENT DEVICE BINDING (udev RULES)
 #===============================================================================
 
-phase3_persistence() {
-    banner "PHASE 3 — PERSISTENT DEVICE BINDING (udev RULES)"
+phase4_persistence() {
+    banner "PHASE 4 — PERSISTENT DEVICE BINDING (udev RULES)"
 
     info "Device nodes like /dev/IBMtape0 are assigned dynamically. They can"
     info "shift across reboots if hardware changes. We create udev rules that"
@@ -433,13 +631,13 @@ ls -la ${SYMLINK_BASE}/
 EOF
 
     # Generate test script
-    cat <<TESTSCRIPT | write_file "test_03_persistence.sh"
+    cat <<TESTSCRIPT | write_file "test_04_persistence.sh"
 #!/usr/bin/env bash
 #===============================================================================
-# TEST 03 — Persistent Device Binding Verification
+# TEST 04 — Persistent Device Binding Verification
 #===============================================================================
 echo "============================================="
-echo " TEST 03 — PERSISTENT DEVICE BINDING"
+echo " TEST 04 — PERSISTENT DEVICE BINDING"
 echo "============================================="
 
 PASS=0; FAIL=0;
@@ -491,11 +689,11 @@ TESTSCRIPT
 }
 
 #===============================================================================
-# PHASE 4 — SP LIBRARY / DRIVE / PATH CONFIGURATION
+# PHASE 5 — SP LIBRARY / DRIVE / PATH CONFIGURATION
 #===============================================================================
 
-phase4_sp_config() {
-    banner "PHASE 4 — IBM STORAGE PROTECT CONFIGURATION"
+phase5_sp_config() {
+    banner "PHASE 5 — IBM STORAGE PROTECT CONFIGURATION"
 
     info "Below are the dsmadmc commands to define the library, drives,"
     info "paths, device class, and storage pool."
@@ -582,13 +780,13 @@ VERIFY
 EOF
 
     # Generate test script
-    cat <<TESTSCRIPT | write_file "test_04_sp_config.sh"
+    cat <<TESTSCRIPT | write_file "test_05_sp_config.sh"
 #!/usr/bin/env bash
 #===============================================================================
-# TEST 04 — IBM Storage Protect Configuration Verification
+# TEST 05 — IBM Storage Protect Configuration Verification
 #===============================================================================
 echo "============================================="
-echo " TEST 04 — SP LIBRARY CONFIGURATION"
+echo " TEST 05 — SP LIBRARY CONFIGURATION"
 echo "============================================="
 
 SP_USER="${SP_ADMIN_USER}"
@@ -630,11 +828,11 @@ TESTSCRIPT
 }
 
 #===============================================================================
-# PHASE 5 — DUAL-PATH FAILOVER TEST
+# PHASE 6 — DUAL-PATH FAILOVER TEST
 #===============================================================================
 
-phase5_failover() {
-    banner "PHASE 5 — DUAL-PATH FAILOVER TESTING"
+phase6_failover() {
+    banner "PHASE 6 — DUAL-PATH FAILOVER TESTING"
 
     info "These commands test failover by taking one path offline at a time."
     warn "Run these during a MAINTENANCE WINDOW only."
@@ -686,11 +884,11 @@ EOF
     {
         echo '#!/usr/bin/env bash'
         echo '#===============================================================================';
-        echo '# TEST 05 — Dual-Path Failover';
+        echo '# TEST 06 — Dual-Path Failover';
         echo '# WARNING: Takes paths offline temporarily. Run in maintenance window!';
         echo '#===============================================================================';
         echo 'echo "============================================="';
-        echo 'echo " TEST 05 — DUAL-PATH FAILOVER"';
+        echo 'echo " TEST 06 — DUAL-PATH FAILOVER"';
         echo 'echo "============================================="';
         echo ''; 
         echo "SP_USER=\"${SP_ADMIN_USER}\"";
@@ -732,30 +930,30 @@ EOF
         echo 'echo ""';
         echo 'echo "Failover testing complete. Verify all paths are back online:"';
         echo '\$DSMADMC "QUERY PATH FORMAT=DETAILED" | grep -E "Source Name|Destination Name|Device|Online"';
-    } | write_file "test_05_failover.sh";
+    } | write_file "test_06_failover.sh";
 
     pause;
 }
 
 #===============================================================================
-# PHASE 6 — END-TO-END TEST
+# PHASE 7 — END-TO-END TEST
 #===============================================================================
 
-phase6_e2e() {
-    banner "PHASE 6 — END-TO-END INTEGRATION TEST"
+phase7_e2e() {
+    banner "PHASE 7 — END-TO-END INTEGRATION TEST"
 
     info "This generates a comprehensive test script that validates the full stack."
     echo "";
 
-    cat <<TESTSCRIPT | write_file "test_06_end_to_end.sh"
+    cat <<TESTSCRIPT | write_file "test_07_end_to_end.sh"
 #!/usr/bin/env bash
 #===============================================================================
-# TEST 06 — End-to-End Integration Test
+# TEST 07 — End-to-End Integration Test
 #===============================================================================
 set -uo pipefail
 
 echo "============================================="
-echo " TEST 06 — END-TO-END INTEGRATION"
+echo " TEST 07 — END-TO-END INTEGRATION"
 echo "============================================="
 
 SP_USER="\${SP_ADMIN_USER}"
@@ -866,11 +1064,11 @@ TESTSCRIPT
 }
 
 #===============================================================================
-# PHASE 7 — MASTER TEST RUNNER
+# PHASE 8 — MASTER TEST RUNNER
 #===============================================================================
 
-phase7_master() {
-    banner "PHASE 7 — MASTER TEST RUNNER"
+phase8_master() {
+    banner "PHASE 8 — MASTER TEST RUNNER"
 
     cat <<'TESTSCRIPT' | write_file "run_all_tests.sh"
 #!/usr/bin/env bash
@@ -919,12 +1117,13 @@ echo "└───────────────────────�
 }
 
 run_test "${SCRIPT_DIR}/test_01_lin_tape.sh";
-run_test "${SCRIPT_DIR}/test_02_discovery.sh";
-run_test "${SCRIPT_DIR}/test_03_persistence.sh";
-run_test "${SCRIPT_DIR}/test_04_sp_config.sh";
+run_test "${SCRIPT_DIR}/test_02_lin_taped.sh";
+run_test "${SCRIPT_DIR}/test_03_discovery.sh";
+run_test "${SCRIPT_DIR}/test_04_persistence.sh";
+run_test "${SCRIPT_DIR}/test_05_sp_config.sh";
 # Uncomment the next line ONLY during a maintenance window:
-# run_test "${SCRIPT_DIR}/test_05_failover.sh";
-run_test "${SCRIPT_DIR}/test_06_end_to_end.sh";
+# run_test "${SCRIPT_DIR}/test_06_failover.sh";
+run_test "${SCRIPT_DIR}/test_07_end_to_end.sh";
 
 echo "";
 echo "╔═══════════════════════════════════════════════════════════╗";
@@ -937,6 +1136,213 @@ echo "╚═══════════════════════�
 [[ $TOTAL_FAIL -eq 0 ]] && echo "✅ ALL TEST SUITES PASSED." || echo "❌ SOME FAILURES.";
 exit $TOTAL_FAIL;
 TESTSCRIPT
+}
+
+#===============================================================================
+# MENU — CHECK EXISTING LIN_TAPE CONFIGURATION
+#===============================================================================
+
+menu_check_existing() {
+    local outfile="${OUTPUT_DIR}/existing_config_check_$(date +%Y%m%d_%H%M%S).txt"
+    mkdir -p "$OUTPUT_DIR"
+
+    banner "CHECKING EXISTING LIN_TAPE CONFIGURATION"
+    info "Running diagnostic checks — results will be saved to:"
+    info "  ${outfile}"
+    echo ""
+
+    {
+    echo "============================================================="
+    echo " IBM lin_tape / lin_taped Configuration Diagnostic"
+    echo " Generated: $(date '+%F %T')"
+    echo "============================================================="
+    echo ""
+
+    echo "─────────────────────────────────────────"
+    echo " DRIVER & MODULE CHECKS"
+    echo "─────────────────────────────────────────"
+
+    if lsmod | grep -q lin_tape 2>/dev/null; then
+        echo "[PASS] lin_tape kernel module is loaded"
+    else
+        echo "[FAIL] lin_tape kernel module is NOT loaded"
+    fi
+
+    echo "[INFO] lin_tape module info:"
+    modinfo lin_tape 2>/dev/null | head -10 || echo "       (modinfo not available)"
+
+    if rpm -qa 2>/dev/null | grep -qi lin_tape; then
+        echo "[PASS] lin_tape RPM installed: $(rpm -qa 2>/dev/null | grep -i lin_tape | head -1)"
+    else
+        echo "[FAIL] lin_tape RPM is NOT installed"
+    fi
+
+    if rpm -qa 2>/dev/null | grep -qi lin_taped; then
+        echo "[PASS] lin_taped RPM installed: $(rpm -qa 2>/dev/null | grep -i lin_taped | head -1)"
+    else
+        echo "[FAIL] lin_taped RPM is NOT installed"
+    fi
+
+    if pgrep lin_taped &>/dev/null || systemctl is-active lin_taped &>/dev/null; then
+        echo "[PASS] lin_taped daemon is running"
+    else
+        echo "[FAIL] lin_taped daemon is NOT running"
+    fi
+
+    if lsmod | grep -q "^st " 2>/dev/null; then
+        echo "[WARN] st driver IS loaded (should not be when using lin_tape)"
+    else
+        echo "[PASS] st driver is NOT loaded"
+    fi
+
+    if lsmod | grep -q "^sg " 2>/dev/null; then
+        echo "[WARN] sg driver IS loaded (should not be when using lin_tape)"
+    else
+        echo "[PASS] sg driver is NOT loaded"
+    fi
+
+    echo ""
+    echo "─────────────────────────────────────────"
+    echo " BOOT PERSISTENCE CHECKS"
+    echo "─────────────────────────────────────────"
+
+    if [[ -f /etc/modules-load.d/lin_tape.conf ]]; then
+        echo "[PASS] /etc/modules-load.d/lin_tape.conf exists"
+    else
+        echo "[FAIL] /etc/modules-load.d/lin_tape.conf does NOT exist"
+    fi
+
+    if [[ -f /etc/modprobe.d/blacklist-tape-generic.conf ]]; then
+        echo "[PASS] /etc/modprobe.d/blacklist-tape-generic.conf exists"
+    else
+        echo "[FAIL] /etc/modprobe.d/blacklist-tape-generic.conf does NOT exist"
+    fi
+
+    if [[ -f /etc/modprobe.d/lin_tape.conf ]] && grep -q "alternate_pathing" /etc/modprobe.d/lin_tape.conf 2>/dev/null; then
+        echo "[PASS] /etc/modprobe.d/lin_tape.conf exists with alternate_pathing"
+    elif [[ -f /etc/modprobe.d/lin_tape.conf ]]; then
+        echo "[WARN] /etc/modprobe.d/lin_tape.conf exists but alternate_pathing not set"
+    else
+        echo "[FAIL] /etc/modprobe.d/lin_tape.conf does NOT exist"
+    fi
+
+    if systemctl is-enabled lin_tape &>/dev/null || systemctl is-enabled lin_tape_load &>/dev/null; then
+        echo "[PASS] lin_tape or lin_tape_load systemd service is enabled"
+    else
+        echo "[WARN] Neither lin_tape nor lin_tape_load systemd service is enabled"
+    fi
+
+    if systemctl is-enabled lin_taped &>/dev/null; then
+        echo "[PASS] lin_taped systemd service is enabled at boot"
+    else
+        echo "[WARN] lin_taped systemd service is NOT enabled at boot"
+    fi
+
+    echo ""
+    echo "─────────────────────────────────────────"
+    echo " DEVICE CHECKS"
+    echo "─────────────────────────────────────────"
+
+    echo "[INFO] /dev/IBMtape* devices:"
+    ls -la /dev/IBMtape* 2>/dev/null || echo "       (none found)"
+
+    echo "[INFO] /dev/IBMchanger* devices:"
+    ls -la /dev/IBMchanger* 2>/dev/null || echo "       (none found)"
+
+    echo "[INFO] Serial numbers (via udevadm):"
+    for dev in /dev/IBMtape[0-9]* /dev/IBMchanger[0-9]*; do
+        [[ -e "$dev" ]] || continue
+        serial=$(udevadm info --query=all --name="$dev" 2>/dev/null | grep -E "ID_SCSI_SERIAL|ATTRS{serial}" | head -1)
+        echo "       ${dev}: ${serial:-(serial not found)}"
+    done
+
+    echo ""
+    echo "─────────────────────────────────────────"
+    echo " UDEV PERSISTENCE CHECKS"
+    echo "─────────────────────────────────────────"
+
+    if [[ -f /etc/udev/rules.d/99-ibm-tape-persist.rules ]]; then
+        echo "[PASS] /etc/udev/rules.d/99-ibm-tape-persist.rules exists"
+    else
+        echo "[FAIL] /etc/udev/rules.d/99-ibm-tape-persist.rules does NOT exist"
+    fi
+
+    if [[ -d "${SYMLINK_BASE}" ]]; then
+        echo "[PASS] ${SYMLINK_BASE}/ directory exists"
+        echo "[INFO] Symlinks in ${SYMLINK_BASE}/:"
+        for link in "${SYMLINK_BASE}"/*; do
+            [[ -L "$link" ]] || continue
+            target=$(readlink -f "$link")
+            if [[ -e "$target" ]]; then
+                echo "[PASS]   ${link} -> ${target}"
+            else
+                echo "[FAIL]   ${link} -> ${target} (BROKEN)"
+            fi
+        done
+    else
+        echo "[FAIL] ${SYMLINK_BASE}/ directory does NOT exist"
+    fi
+
+    echo ""
+    echo "─────────────────────────────────────────"
+    echo " DUAL-PATH / ALTERNATE PATHING CHECKS"
+    echo "─────────────────────────────────────────"
+
+    alt_path=$(cat /sys/module/lin_tape/parameters/alternate_pathing 2>/dev/null)
+    if [[ "$alt_path" == "1" ]]; then
+        echo "[PASS] alternate_pathing=1 (dual path active)"
+    elif [[ -n "$alt_path" ]]; then
+        echo "[WARN] alternate_pathing=${alt_path} (expected 1 for dual path)"
+    else
+        echo "[INFO] /sys/module/lin_tape/parameters/alternate_pathing not available (module not loaded?)"
+    fi
+
+    echo "[INFO] FC HBA port states:"
+    for host_dir in /sys/class/fc_host/host*; do
+        [[ -d "$host_dir" ]] || continue
+        host=$(basename "$host_dir")
+        wwpn=$(cat "${host_dir}/port_name" 2>/dev/null)
+        state=$(cat "${host_dir}/port_state" 2>/dev/null)
+        echo "       ${host}: WWPN=${wwpn}  State=${state}"
+    done
+
+    echo "[INFO] /proc/scsi/IBMtape (path info):"
+    cat /proc/scsi/IBMtape 2>/dev/null || echo "       (not available)"
+
+    echo ""
+    echo "─────────────────────────────────────────"
+    echo " KERNEL / SYSTEM INFO"
+    echo "─────────────────────────────────────────"
+
+    echo "[INFO] Kernel: $(uname -r)"
+    echo "[INFO] OS: $(cat /etc/redhat-release 2>/dev/null || grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 || echo "(OS information not available)")"
+    echo "[INFO] Recent dmesg (tape/lin_tape related):"
+    dmesg 2>/dev/null | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20 || echo "       (none or dmesg not available)"
+
+    if command -v dsmadmc &>/dev/null; then
+        echo ""
+        echo "─────────────────────────────────────────"
+        echo " SP CONFIGURATION CHECKS"
+        echo "─────────────────────────────────────────"
+        echo "[INFO] dsmadmc found at: $(command -v dsmadmc)"
+        echo "[INFO] To query SP configuration, run:"
+        echo "       dsmadmc -id=<admin> 'QUERY LIBRARY'"
+        echo "       dsmadmc -id=<admin> 'QUERY PATH FORMAT=DETAILED'"
+        echo "       dsmadmc -id=<admin> 'QUERY DRIVE <libname> FORMAT=DETAILED'"
+        echo "       dsmadmc -id=<admin> 'QUERY DEVCLASS FORMAT=DETAILED'"
+        echo "       dsmadmc -id=<admin> 'QUERY STGPOOL FORMAT=DETAILED'"
+    fi
+
+    echo ""
+    echo "============================================================="
+    echo " Diagnostic complete: $(date '+%F %T')"
+    echo "============================================================="
+
+    } | tee "${outfile}"
+
+    echo ""
+    success "Diagnostic saved to: ${outfile}"
+    echo ""
 }
 
 #===============================================================================
@@ -961,28 +1367,60 @@ main() {
     echo "║   Phases:                                                       ║";
     echo "║     0 — Gather information                                      ║";
     echo "║     1 — lin_tape driver installation commands                   ║";
-    echo "║     2 — Device discovery commands                               ║";
-    echo "║     3 — Persistent device binding (udev rules)                  ║";
-    echo "║     4 — SP library / drive / path definition                    ║";
-    echo "║     5 — Dual-path failover test scripts                         ║";
-    echo "║     6 — End-to-end integration test                             ║";
-    echo "║     7 — Master test runner                                      ║";
+    echo "║     2 — lin_taped daemon setup / start / stop management        ║";
+    echo "║     3 — Device discovery commands                               ║";
+    echo "║     4 — Persistent device binding (udev rules)                  ║";
+    echo "║     5 — SP library / drive / path definition                    ║";
+    echo "║     6 — Dual-path failover test scripts                         ║";
+    echo "║     7 — End-to-end integration test                             ║";
+    echo "║     8 — Master test runner                                      ║";
     echo "║                                                                 ║";
     echo "╚═══════════════════════════════════════════════════════════════════╝";
     echo "";
 
     mkdir -p "$OUTPUT_DIR";
 
+    # ── Pre-wizard menu ──────────────────────────────────────────────────
+    while true; do
+        echo "    ╔═══════════════════════════════════════════════════════════════╗"
+        echo "    ║  Select an option:                                           ║"
+        echo "    ║                                                              ║"
+        echo "    ║    1) Run full setup wizard (new installation)               ║"
+        echo "    ║    2) Check existing lin_tape configuration                  ║"
+        echo "    ║    3) Exit                                                   ║"
+        echo "    ║                                                              ║"
+        echo "    ╚═══════════════════════════════════════════════════════════════╝"
+        echo ""
+        read -rp "    Enter choice [1-3]: " menu_choice
+        echo ""
+        case "$menu_choice" in
+            1)
+                break
+                ;;
+            2)
+                menu_check_existing
+                ;;
+            3)
+                info "Exiting."
+                exit 0
+                ;;
+            *)
+                warn "Invalid choice. Please enter 1, 2, or 3."
+                ;;
+        esac
+    done
+
     pause;
 
     phase0_gather;
     phase1_lin_tape;
-    phase2_discovery;
-    phase3_persistence;
-    phase4_sp_config;
-    phase5_failover;
-    phase6_e2e;
-    phase7_master;
+    phase2_lin_taped;
+    phase3_discovery;
+    phase4_persistence;
+    phase5_sp_config;
+    phase6_failover;
+    phase7_e2e;
+    phase8_master;
 
     banner "WIZARD COMPLETE";
 
@@ -1006,11 +1444,12 @@ EOF
     echo "";
     print_commands <<EOF
 sudo bash ${OUTPUT_DIR}/test_01_lin_tape.sh
-sudo bash ${OUTPUT_DIR}/test_02_discovery.sh
-sudo bash ${OUTPUT_DIR}/test_03_persistence.sh
-sudo bash ${OUTPUT_DIR}/test_04_sp_config.sh
-sudo bash ${OUTPUT_DIR}/test_05_failover.sh      # maintenance window only!
-sudo bash ${OUTPUT_DIR}/test_06_end_to_end.sh
+sudo bash ${OUTPUT_DIR}/test_02_lin_taped.sh
+sudo bash ${OUTPUT_DIR}/test_03_discovery.sh
+sudo bash ${OUTPUT_DIR}/test_04_persistence.sh
+sudo bash ${OUTPUT_DIR}/test_05_sp_config.sh
+sudo bash ${OUTPUT_DIR}/test_06_failover.sh      # maintenance window only!
+sudo bash ${OUTPUT_DIR}/test_07_end_to_end.sh
 EOF
 
     success "Done. Copy/paste the commands from each phase into your terminal. 🎉";
