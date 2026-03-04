@@ -414,6 +414,172 @@
   }
   .notes-textarea:focus { border-top-color: var(--accent); }
   .notes-textarea::placeholder { color: var(--text-dim); }
+
+  /* ===== Notes Maximize Button ===== */
+  .notes-box { position: relative; }
+  .notes-maximize-btn {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    opacity: 0.5;
+    transition: opacity var(--transition);
+    line-height: 1;
+  }
+  .notes-maximize-btn:hover { opacity: 1; color: var(--accent); }
+
+  /* ===== Notes Modal Overlay ===== */
+  .notes-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .notes-modal {
+    width: 90vw;
+    height: 85vh;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  .notes-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .notes-modal-title {
+    color: var(--accent);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .notes-modal-close-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .notes-modal-close-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .notes-modal-textarea {
+    flex: 1;
+    background: var(--cmd-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .notes-modal-textarea:focus { border-color: var(--accent); }
+
+  /* ===== General Notes Section ===== */
+  #gn-container {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg2);
+    overflow: hidden;
+    margin-top: 20px;
+  }
+  #gn-tab-bar {
+    display: flex;
+    align-items: center;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  #gn-tabs {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    overflow-x: auto;
+  }
+  .gn-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 12px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    user-select: none;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: inherit;
+    transition: color var(--transition), border-color var(--transition);
+  }
+  .gn-tab:hover { color: var(--text); }
+  .gn-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .gn-tab-name { outline: none; }
+  .gn-tab-remove {
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--transition);
+    background: none;
+    border: none;
+    padding: 0 2px;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .gn-tab:hover .gn-tab-remove { opacity: 0.7; }
+  .gn-tab-remove:hover { opacity: 1 !important; color: var(--accent); }
+  #gn-add-tab {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  #gn-add-tab:hover { color: var(--accent); }
+  #gn-textarea {
+    display: block;
+    width: 100%;
+    min-height: 400px;
+    background: var(--bg2);
+    color: var(--text);
+    border: none;
+    border-top: 2px solid transparent;
+    padding: 12px 14px;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13.5px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    transition: border-color var(--transition);
+    box-sizing: border-box;
+  }
+  #gn-textarea:focus { border-top-color: var(--accent); }
+  #gn-textarea::placeholder { color: var(--text-dim); }
+
   @media (max-width: 768px) {
     .btn-header { font-size: 11px; padding: 5px 7px; }
   }
@@ -487,6 +653,7 @@
       <li data-section="diagnostics"><a href="#diagnostics"><span class="nav-icon">🏥</span><span class="nav-label">Diagnostics &amp; Troubleshooting</span></a></li>
       <li data-section="document-system"><a href="#document-system"><span class="nav-icon">📋</span><span class="nav-label">Document Existing System</span></a></li>
       <li data-section="db-restore"><a href="#db-restore"><span class="nav-icon">🔄</span><span class="nav-label">Database Restore</span></a></li>
+      <li data-section="general-notes"><a href="#general-notes"><span class="nav-icon">📝</span><span class="nav-label">General Notes</span></a></li>
     </ul>
   </nav>
 
@@ -2809,7 +2976,33 @@ echo "============================================="</pre>
       </div>
     </section>
 
+    <!-- ===================================== -->
+    <!-- 16. General Notes                     -->
+    <!-- ===================================== -->
+    <section id="general-notes" class="section">
+      <div class="section-title"><span>📝</span> General Notes</div>
+      <p class="section-desc">Freeform notes workspace with multiple tabs. Create, rename, and organize your notes across tabs.</p>
+      <div id="gn-container">
+        <div id="gn-tab-bar">
+          <div id="gn-tabs"></div>
+          <button id="gn-add-tab" title="Add new tab">+</button>
+        </div>
+        <textarea id="gn-textarea" placeholder="Add your notes here\u2026"></textarea>
+      </div>
+    </section>
+
   </main>
+</div>
+
+<!-- ===== Notes Maximize Modal ===== -->
+<div id="notes-modal-overlay" class="notes-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
+  <div class="notes-modal">
+    <div class="notes-modal-header">
+      <span class="notes-modal-title" id="notes-modal-title"></span>
+      <button class="notes-modal-close-btn" id="notes-modal-close" title="Close (Esc)">✕</button>
+    </div>
+    <textarea class="notes-modal-textarea" id="notes-modal-textarea" placeholder="Add your notes here\u2026"></textarea>
+  </div>
 </div>
 
 <script>
@@ -2981,7 +3174,7 @@ echo "============================================="</pre>
   var SECTION_IDS = [
     'reference', 'prerequisites', 'driver-install', 'daemon', 'boot',
     'tsmscsi', 'discovery', 'udev', 'dual-path', 'sp-config', 'failover',
-    'verification', 'diagnostics', 'document-system', 'db-restore'
+    'verification', 'diagnostics', 'document-system', 'db-restore', 'general-notes'
   ];
 
   var titleEl = document.querySelector('#header h1');
@@ -2993,22 +3186,208 @@ echo "============================================="</pre>
 
   // Inject notes boxes into every section and restore saved notes
   SECTION_IDS.forEach(function (id) {
+    if (id === 'general-notes') { return; } // general-notes has its own tabbed UI
     var section = document.getElementById(id);
     if (!section) { return; }
+    var sectionTitle = (section.querySelector('.section-title') || {}).textContent || id;
     var box = document.createElement('div');
     box.className = 'notes-box';
     box.innerHTML =
       '<div class="notes-heading">📝 Notes</div>' +
+      '<button class="notes-maximize-btn" title="Expand notes" aria-label="Expand notes">\u26f6</button>' +
       '<textarea class="notes-textarea" data-section-id="' + id + '"' +
       ' placeholder="Add your notes here\u2026"></textarea>';
     section.appendChild(box);
     var ta = box.querySelector('.notes-textarea');
+    var maxBtn = box.querySelector('.notes-maximize-btn');
     var saved = localStorage.getItem(LS_PREFIX + 'notes_' + id);
     if (saved) { ta.value = saved; }
     ta.addEventListener('input', function () {
       localStorage.setItem(LS_PREFIX + 'notes_' + id, ta.value);
     });
+    maxBtn.addEventListener('click', function () {
+      openNotesModal(ta, sectionTitle.trim());
+    });
   });
+
+  // ===== Notes Modal (maximize/minimize) =====
+  var notesModalOverlay = document.getElementById('notes-modal-overlay');
+  var notesModalTextarea = document.getElementById('notes-modal-textarea');
+  var notesModalTitle = document.getElementById('notes-modal-title');
+  var notesModalClose = document.getElementById('notes-modal-close');
+  var activeModalSourceTextarea = null;
+
+  function openNotesModal(sourceTa, title) {
+    activeModalSourceTextarea = sourceTa;
+    notesModalTitle.textContent = title;
+    notesModalTextarea.value = sourceTa.value;
+    notesModalOverlay.style.display = 'flex';
+    notesModalTextarea.focus();
+  }
+
+  function closeNotesModal() {
+    notesModalOverlay.style.display = 'none';
+    activeModalSourceTextarea = null;
+  }
+
+  notesModalTextarea.addEventListener('input', function () {
+    if (!activeModalSourceTextarea) { return; }
+    activeModalSourceTextarea.value = notesModalTextarea.value;
+    activeModalSourceTextarea.dispatchEvent(new Event('input'));
+  });
+
+  notesModalClose.addEventListener('click', closeNotesModal);
+  notesModalOverlay.addEventListener('click', function (e) {
+    if (e.target === notesModalOverlay) { closeNotesModal(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && notesModalOverlay.style.display !== 'none') { closeNotesModal(); }
+  });
+
+  // ===== General Notes Tabbed Interface =====
+  var GN_LS_KEY = LS_PREFIX + 'general_notes';
+  var gnTabsEl = document.getElementById('gn-tabs');
+  var gnTextarea = document.getElementById('gn-textarea');
+  var gnAddTabBtn = document.getElementById('gn-add-tab');
+  var gnSaveTimer = null;
+  var gnData = { activeTab: null, tabs: [] };
+
+  function gnSave() {
+    localStorage.setItem(GN_LS_KEY, JSON.stringify(gnData));
+  }
+
+  function gnDebouncedSave() {
+    clearTimeout(gnSaveTimer);
+    gnSaveTimer = setTimeout(gnSave, 300);
+  }
+
+  function gnGetActiveTab() {
+    return gnData.tabs.find(function (t) { return t.id === gnData.activeTab; }) || null;
+  }
+
+  function gnRenderTabs() {
+    gnTabsEl.innerHTML = '';
+    gnData.tabs.forEach(function (tab) {
+      var btn = document.createElement('button');
+      btn.className = 'gn-tab' + (tab.id === gnData.activeTab ? ' active' : '');
+      btn.dataset.tabId = tab.id;
+
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'gn-tab-name';
+      nameSpan.textContent = tab.name;
+      btn.appendChild(nameSpan);
+
+      var removeBtn = document.createElement('button');
+      removeBtn.className = 'gn-tab-remove';
+      removeBtn.textContent = '\u00d7';
+      removeBtn.title = 'Remove tab';
+      removeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (gnData.tabs.length === 1) {
+          alert('Cannot remove the last tab.');
+          return;
+        }
+        if (!confirm('Delete tab "' + tab.name + '"? This cannot be undone.')) { return; }
+        var idx = gnData.tabs.findIndex(function (t) { return t.id === tab.id; });
+        gnData.tabs.splice(idx, 1);
+        if (gnData.activeTab === tab.id) {
+          gnData.activeTab = gnData.tabs[Math.min(idx, gnData.tabs.length - 1)].id;
+        }
+        gnRenderTabs();
+        gnLoadActiveTab();
+        gnSave();
+      });
+      btn.appendChild(removeBtn);
+
+      btn.addEventListener('click', function () {
+        if (gnData.activeTab !== tab.id) {
+          var cur = gnGetActiveTab();
+          if (cur) { cur.content = gnTextarea.value; }
+          gnData.activeTab = tab.id;
+          gnRenderTabs();
+          gnLoadActiveTab();
+          gnSave();
+        }
+      });
+
+      // Double-click to rename
+      nameSpan.addEventListener('dblclick', function (e) {
+        e.stopPropagation();
+        nameSpan.contentEditable = 'true';
+        nameSpan.focus();
+        var range = document.createRange();
+        range.selectNodeContents(nameSpan);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      });
+      nameSpan.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); nameSpan.blur(); }
+        if (e.key === 'Escape') { nameSpan.textContent = tab.name; nameSpan.blur(); }
+      });
+      nameSpan.addEventListener('blur', function () {
+        nameSpan.contentEditable = 'false';
+        var newName = nameSpan.textContent.trim();
+        if (newName) { tab.name = newName; } else { nameSpan.textContent = tab.name; }
+        gnSave();
+      });
+
+      gnTabsEl.appendChild(btn);
+    });
+  }
+
+  function gnLoadActiveTab() {
+    var tab = gnGetActiveTab();
+    gnTextarea.value = tab ? tab.content : '';
+  }
+
+  function gnInit() {
+    var saved = localStorage.getItem(GN_LS_KEY);
+    if (saved) {
+      try { gnData = JSON.parse(saved); } catch (e) { console.warn('General notes parse error:', e); gnData = { activeTab: null, tabs: [] }; }
+    }
+    if (!gnData.tabs || gnData.tabs.length === 0) {
+      gnData.tabs = [{ id: 'tab-' + Date.now(), name: 'General', content: '' }];
+    }
+    if (!gnData.activeTab || !gnData.tabs.find(function (t) { return t.id === gnData.activeTab; })) {
+      gnData.activeTab = gnData.tabs[0].id;
+    }
+    gnRenderTabs();
+    gnLoadActiveTab();
+  }
+
+  gnTextarea.addEventListener('input', function () {
+    var tab = gnGetActiveTab();
+    if (tab) { tab.content = gnTextarea.value; }
+    gnDebouncedSave();
+  });
+
+  gnAddTabBtn.addEventListener('click', function () {
+    var cur = gnGetActiveTab();
+    if (cur) { cur.content = gnTextarea.value; }
+    var newTab = { id: 'tab-' + Date.now(), name: 'New Tab', content: '' };
+    gnData.tabs.push(newTab);
+    gnData.activeTab = newTab.id;
+    gnRenderTabs();
+    gnLoadActiveTab();
+    gnSave();
+    // Auto-enter rename mode on the new tab
+    var lastTabBtn = gnTabsEl.lastElementChild;
+    if (lastTabBtn) {
+      var nameSpan = lastTabBtn.querySelector('.gn-tab-name');
+      if (nameSpan) {
+        nameSpan.contentEditable = 'true';
+        nameSpan.focus();
+        var range = document.createRange();
+        range.selectNodeContents(nameSpan);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+  });
+
+  gnInit();
 
   // Rename title
   document.getElementById('btn-rename').addEventListener('click', function () {
@@ -3035,12 +3414,18 @@ echo "============================================="</pre>
 
   // Export
   document.getElementById('btn-export').addEventListener('click', async function () {
+    // Sync active general notes tab content before export
+    var gnActiveTab = gnGetActiveTab();
+    if (gnActiveTab) { gnActiveTab.content = gnTextarea.value; }
+
     var data = {
       title: titleEl.textContent,
       notes: {},
+      generalNotes: { activeTab: gnData.activeTab, tabs: gnData.tabs.map(function (t) { return { id: t.id, name: t.name, content: t.content }; }) },
       exportDate: new Date().toISOString()
     };
     SECTION_IDS.forEach(function (id) {
+      if (id === 'general-notes') { return; }
       var ta = document.querySelector('#' + id + ' .notes-textarea');
       data.notes[id] = ta ? ta.value : '';
     });
@@ -3129,11 +3514,22 @@ echo "============================================="</pre>
           titleEl.textContent = data.title;
         }
         SECTION_IDS.forEach(function (id) {
+          if (id === 'general-notes') { return; }
           var val = (data.notes && typeof data.notes[id] === 'string') ? data.notes[id] : '';
           localStorage.setItem(LS_PREFIX + 'notes_' + id, val);
           var ta = document.querySelector('.notes-textarea[data-section-id="' + id + '"]');
           if (ta) { ta.value = val; }
         });
+        // Restore general notes if present in the import file
+        if (data.generalNotes && Array.isArray(data.generalNotes.tabs) && data.generalNotes.tabs.length > 0) {
+          gnData = { activeTab: data.generalNotes.activeTab, tabs: data.generalNotes.tabs };
+          if (!gnData.tabs.find(function (t) { return t.id === gnData.activeTab; })) {
+            gnData.activeTab = gnData.tabs[0].id;
+          }
+          gnSave();
+          gnRenderTabs();
+          gnLoadActiveTab();
+        }
         showImportConfirm('✓ Import successful');
       } catch (err) {
         showImportConfirm('⚠ Import failed: ' + err.message, true);
