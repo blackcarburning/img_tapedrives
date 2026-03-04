@@ -940,18 +940,27 @@ WantedBy=multi-user.target</pre>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">/opt/tivoli/tsm/devices/bin/autoconf -a</pre>
         </div>
-        <div class="cmd-block">
-          <div class="cmd-label">Fix permissions after autoconf</div>
-          <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">chmod -R 0666 /dev/tsmscsi/</pre>
+        <div class="callout callout-error">
+          <strong>⛔ CRITICAL: /dev/tsmscsi/ DIRECTORY PERMISSIONS</strong><br><br>
+          Do <strong>NOT</strong> use <code>chmod -R 0666 /dev/tsmscsi/</code>. The <code>-R</code> flag applies <code>0666</code> to the directory itself, stripping the execute bit. Without <code>x</code> on a directory, no user can <code>cd</code> into it or access any files inside — even if those files have <code>0666</code> permissions.<br><br>
+          <strong>Symptom:</strong><br>
+          <code>drw-rw-rw-  2 root root   80 Mar  4 11:16 .     ← missing x bit</code><br>
+          <code>su - tsminst1 -c 'cat /dev/tsmscsi/lbinfo'</code><br>
+          <code>cat: /dev/tsmscsi/lbinfo: Permission denied</code><br><br>
+          <strong>Fix:</strong> Set the directory to <code>0777</code> (needs <code>x</code> for traversal) and files to <code>0666</code>.
         </div>
         <div class="cmd-block">
-          <div class="cmd-label">Verify permissions</div>
+          <div class="cmd-label">Fix /dev/tsmscsi/ permissions (directory needs execute bit)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">ls -la /dev/tsmscsi/</pre>
+          <pre class="cmd-pre">chmod 0777 /dev/tsmscsi/ &amp;&amp; chmod 0666 /dev/tsmscsi/*</pre>
         </div>
         <div class="cmd-block">
-          <div class="cmd-label">Test access as tsminst1</div>
+          <div class="cmd-label">Verify directory permissions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -ld /dev/tsmscsi/</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Test tsminst1 access</div>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">su - tsminst1 -c 'cat /dev/tsmscsi/lbinfo'</pre>
         </div>
@@ -975,7 +984,7 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/sbin/modprobe sg
 ExecStart=/opt/tivoli/tsm/devices/bin/autoconf -a
-ExecStartPost=/bin/chmod -R 0666 /dev/tsmscsi/
+ExecStartPost=/bin/bash -c '/bin/chmod 0777 /dev/tsmscsi/ &amp;&amp; /bin/chmod 0666 /dev/tsmscsi/*'
 
 [Install]
 WantedBy=multi-user.target</pre>
@@ -994,11 +1003,16 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/sbin/modprobe sg
 ExecStart=/opt/tivoli/tsm/devices/bin/autoconf -a
-ExecStartPost=/bin/chmod -R 0666 /dev/tsmscsi/
+ExecStartPost=/bin/bash -c '/bin/chmod 0777 /dev/tsmscsi/ && /bin/chmod 0666 /dev/tsmscsi/*'
 
 [Install]
 WantedBy=multi-user.target
 EOF</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Update tsmscsi systemd service with correct permissions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">sudo sed -i 's|ExecStartPost=.*chmod.*tsmscsi.*|ExecStartPost=/bin/bash -c '"'"'/bin/chmod 0777 /dev/tsmscsi/ \&amp;\&amp; /bin/chmod 0666 /dev/tsmscsi/*'"'"'|' /etc/systemd/system/tsmscsi-autoconf.service &amp;&amp; sudo systemctl daemon-reload</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Reload systemd and enable</div>
@@ -1057,7 +1071,7 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Manually re-run autoconf and fix permissions</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">/opt/tivoli/tsm/devices/bin/autoconf -a &amp;&amp; chmod -R 0666 /dev/tsmscsi/</pre>
+          <pre class="cmd-pre">/opt/tivoli/tsm/devices/bin/autoconf -a &amp;&amp; chmod 0777 /dev/tsmscsi/ &amp;&amp; chmod 0666 /dev/tsmscsi/*</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Check SP server can see changer</div>
@@ -3011,28 +3025,81 @@ echo "============================================="</pre>
     }
   });
 
+  function showExportConfirm() {
+    var el = document.getElementById('import-confirm');
+    el.textContent = '✓ Exported!';
+    el.className = 'import-confirm';
+    el.style.display = 'inline';
+    setTimeout(function () { el.style.display = 'none'; }, 3000);
+  }
+
   // Export
-  document.getElementById('btn-export').addEventListener('click', function () {
-    var notes = {};
-    SECTION_IDS.forEach(function (id) {
-      notes[id] = localStorage.getItem(LS_PREFIX + 'notes_' + id) || '';
-    });
+  document.getElementById('btn-export').addEventListener('click', async function () {
     var data = {
       title: titleEl.textContent,
-      notes: notes,
+      notes: {},
       exportDate: new Date().toISOString()
     };
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
+    SECTION_IDS.forEach(function (id) {
+      var ta = document.querySelector('#' + id + ' .notes-textarea');
+      data.notes[id] = ta ? ta.value : '';
+    });
+    var jsonStr = JSON.stringify(data, null, 2);
+
+    // Build default filename
     var d = new Date();
-    var dateStamp = d.getFullYear() +
-             ('0' + (d.getMonth() + 1)).slice(-2) +
-             ('0' + d.getDate()).slice(-2);
-    a.href = url;
-    a.download = 'sp_tape_config_notes_' + dateStamp + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    var defaultName = 'sp_tape_config_notes_' + d.getFullYear() +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      String(d.getDate()).padStart(2, '0') + '.json';
+
+    // Use last-saved filename if available
+    var lastFilename = localStorage.getItem(LS_PREFIX + 'last_export_filename');
+    if (lastFilename) {
+      // Sanitize: strip path separators and limit length
+      lastFilename = lastFilename.replace(/[/\\]/g, '').substring(0, 255);
+    }
+    var suggestedName = lastFilename || defaultName;
+
+    if (window.showSaveFilePicker) {
+      try {
+        var handle = await window.showSaveFilePicker({
+          suggestedName: suggestedName,
+          types: [{
+            description: 'JSON Files',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        var writable = await handle.createWritable();
+        await writable.write(jsonStr);
+        await writable.close();
+        // Remember the chosen filename
+        localStorage.setItem(LS_PREFIX + 'last_export_filename', handle.name);
+        showExportConfirm();
+      } catch (err) {
+        // User cancelled the dialog — do nothing
+        if (err.name !== 'AbortError') {
+          console.error('Export failed:', err);
+          alert('Export failed: ' + err.message);
+        }
+      }
+    } else {
+      // Fallback for browsers without File System Access API
+      var blob = new Blob([jsonStr], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedName;
+      try {
+        document.body.appendChild(a);
+        a.click();
+      } finally {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      // Remember the filename
+      localStorage.setItem(LS_PREFIX + 'last_export_filename', suggestedName);
+      showExportConfirm();
+    }
   });
 
   // Import
