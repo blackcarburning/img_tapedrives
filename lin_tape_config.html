@@ -2975,6 +2975,135 @@ echo "============================================="</pre>
           <li><a href="https://www.ibm.com/support/pages/recommended-dsmserv-restore-db-point-time-procedure" target="_blank" rel="noopener noreferrer">IBM Support — Recommended DSMSERV RESTORE DB point-in-time procedure</a></li>
         </ul>
       </div>
+
+      <div class="subsection">
+        <h3>SSL/TLS Certificate Mismatch After Restore</h3>
+        <div class="callout callout-error">
+          <strong>⛔ SSL/TLS Certificate Mismatch on New Hardware:</strong> When you restore an SP database onto <strong>new hardware</strong>, the restored database contains the <strong>old server's SSL certificate fingerprints</strong> in its keystore (<code>cert.kdb</code> / <code>cert256.kdb</code>). The new server generated its own self-signed SSL certificate during <code>dsmserv format</code>. These don't match.
+          <ul>
+            <li><strong>Symptoms:</strong> <code>dsmadmc</code> connections fail with SSL handshake/certificate errors.</li>
+            <li>BA client backups fail with TLS errors.</li>
+            <li>Server-to-server communication (replication, virtual volumes) breaks.</li>
+          </ul>
+        </div>
+        <div class="callout callout-info">
+          <strong>Fix sequence overview:</strong>
+          <ol style="margin-top:8px;padding-left:20px">
+            <li>Start the server in maintenance mode (console, no SSL required)</li>
+            <li>Downgrade <code>SESSIONSECURITY</code> to <code>TRANSITIONAL</code> from the console</li>
+            <li>Delete and regenerate SSL certificates</li>
+            <li>Re-extract the public cert and distribute to clients</li>
+            <li>Set <code>SESSIONSECURITY</code> back to <code>STRICT</code> once stable</li>
+          </ol>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Start server in maintenance mode (console)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cd /opt/tivoli/tsm/server/bin &amp;&amp; dsmserv</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Downgrade session security from server console</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">UPDATE ADMIN ADMIN SESSIONSECURITY=TRANSITIONAL</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Stop the server before cert regeneration</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;HALT&quot;</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Delete old SSL keystore</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">rm -f /opt/tivoli/tsm/server/bin/cert.kdb /opt/tivoli/tsm/server/bin/cert.sth /opt/tivoli/tsm/server/bin/cert256.kdb /opt/tivoli/tsm/server/bin/cert256.sth /opt/tivoli/tsm/server/bin/cert.arm /opt/tivoli/tsm/server/bin/cert256.arm</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Create new SSL keystore</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">gsk8capicmd_64 -keydb -create -db /opt/tivoli/tsm/server/bin/cert.kdb -pw CHANGEME -stash -type cms</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Generate new self-signed certificate</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">gsk8capicmd_64 -cert -create -db /opt/tivoli/tsm/server/bin/cert.kdb -stashed -label &quot;TSM Server SelfSigned SHA Key&quot; -size 2048 -sigalg SHA256WithRSA -default</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Extract public cert for clients</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">gsk8capicmd_64 -cert -extract -db /opt/tivoli/tsm/server/bin/cert.kdb -stashed -label &quot;TSM Server SelfSigned SHA Key&quot; -target /opt/tivoli/tsm/server/bin/cert256.arm -format ascii</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Restart the server normally</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cd /opt/tivoli/tsm/server/bin &amp;&amp; dsmserv</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify dsmadmc connects over SSL</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD -tcps=localhost -tcpport=1500 &quot;QUERY STATUS&quot;</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Set SESSIONSECURITY back to STRICT</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;UPDATE ADMIN ADMIN SESSIONSECURITY=STRICT&quot;</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>SESSIONSECURITY Reference</h3>
+        <table class="attr-table">
+          <thead>
+            <tr><th>Setting</th><th>Behaviour</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>TRANSITIONAL</td><td>Allows both TLS and non-TLS connections. Admin password hash is not bound to the server's SSL certificate fingerprint. Use temporarily after restore.</td></tr>
+            <tr><td>STRICT</td><td>Enforces TLS for all connections. Admin session token is bound to the server's SSL certificate. Default in SP 8.1.x. Set after cert regeneration is verified.</td></tr>
+          </tbody>
+        </table>
+        <div class="cmd-block">
+          <div class="cmd-label">Check current SESSIONSECURITY for all admins</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;SELECT ADMIN_NAME, SESSION_SECURITY FROM ADMINS&quot;</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Set TRANSITIONAL for a specific admin</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;UPDATE ADMIN adminname SESSIONSECURITY=TRANSITIONAL&quot;</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Set STRICT for a specific admin</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;UPDATE ADMIN adminname SESSIONSECURITY=STRICT&quot;</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Multi-Server / Shared Admin Considerations</h3>
+        <div class="callout callout-warn">
+          <strong>⚠️ Shared Admin IDs Across Multiple Servers:</strong> If you have <strong>multiple SP servers</strong> (production + DR replica, hub + spoke replication) using the <strong>same admin ID</strong> (e.g., <code>ADMIN</code>), <code>SESSIONSECURITY=STRICT</code> binds the admin's session token to the server's SSL certificate fingerprint.
+          <ul>
+            <li>Logging into Server A with <code>ADMIN</code> locks the session hash to Server A's cert. Attempting to use the same <code>ADMIN</code> on Server B (different cert) fails.</li>
+            <li>After a DB restore, the restored database has the old server's cert fingerprint baked into the admin record. The new server's cert is different → lockout.</li>
+          </ul>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Set TRANSITIONAL on each server</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;UPDATE ADMIN ADMIN SESSIONSECURITY=TRANSITIONAL&quot;</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Reset admin password on the new server (forces new cert binding)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;UPDATE ADMIN ADMIN newpassword&quot;</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Set STRICT after all servers have correct certs</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD &quot;UPDATE ADMIN ADMIN SESSIONSECURITY=STRICT&quot;</pre>
+        </div>
+        <div class="callout callout-ok">
+          <strong>✅ Best Practice:</strong> Use <strong>separate admin IDs per server</strong> (e.g., <code>ADMIN_PROD</code>, <code>ADMIN_DR</code>) to avoid cross-server cert binding conflicts entirely.
+        </div>
+      </div>
     </section>
 
     <!-- ===================================== -->
