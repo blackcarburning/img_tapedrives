@@ -351,6 +351,73 @@
   .btn-primary:hover { background: var(--accent); color: #000; }
   .btn-primary.copied { background: var(--green); color: #000; border-color: var(--green); }
 
+  /* ===== Header Actions (rename / export / import) ===== */
+  #header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .btn-header {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-dim);
+    border-color: var(--border);
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .btn-header:hover {
+    background: var(--bg3);
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+  .import-confirm {
+    font-size: 12px;
+    color: var(--green);
+    white-space: nowrap;
+  }
+  .import-error { color: var(--yellow); }
+
+  /* ===== Notes Box ===== */
+  .notes-box {
+    margin-top: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg2);
+    overflow: hidden;
+  }
+  .notes-heading {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 8px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .notes-textarea {
+    display: block;
+    width: 100%;
+    min-height: 100px;
+    background: var(--bg2);
+    color: var(--text);
+    border: none;
+    border-top: 2px solid transparent;
+    padding: 12px 14px;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13.5px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .notes-textarea:focus { border-top-color: var(--accent); }
+  .notes-textarea::placeholder { color: var(--text-dim); }
+  @media (max-width: 768px) {
+    .btn-header { font-size: 11px; padding: 5px 7px; }
+  }
+
   /* ===== Overlay for mobile ===== */
   #overlay {
     display: none;
@@ -384,6 +451,13 @@
 <header id="header">
   <button id="hamburger" aria-label="Toggle sidebar">☰</button>
   <h1>🖥️ IBM Storage Protect — Tape Library Configuration Guide</h1>
+  <div id="header-actions">
+    <button id="btn-rename" class="btn btn-header" title="Rename document title" aria-label="Rename document title">✏️ Rename</button>
+    <button id="btn-export" class="btn btn-header" title="Export notes as JSON" aria-label="Export notes as JSON">📤 Export</button>
+    <button id="btn-import" class="btn btn-header" title="Import notes from JSON" aria-label="Import notes from JSON">📥 Import</button>
+    <span id="import-confirm" class="import-confirm" style="display:none"></span>
+    <input type="file" id="import-file-input" accept=".json" style="display:none" />
+  </div>
 </header>
 
 <!-- ===== Overlay (mobile) ===== -->
@@ -2683,6 +2757,121 @@ echo "============================================="</pre>
         li.classList.add('hidden');
       }
     });
+  });
+
+  /* ===== Notes, Rename, Export / Import ===== */
+
+  var LS_PREFIX = 'sp_tape_config_';
+  var SECTION_IDS = [
+    'reference', 'prerequisites', 'driver-install', 'daemon', 'boot',
+    'discovery', 'udev', 'dual-path', 'sp-config', 'failover',
+    'verification', 'diagnostics', 'document-system', 'db-restore'
+  ];
+
+  var titleEl = document.querySelector('#header h1');
+  var DEFAULT_TITLE = titleEl.textContent;
+
+  // Restore saved title
+  var savedTitle = localStorage.getItem(LS_PREFIX + 'title');
+  if (savedTitle) { titleEl.textContent = savedTitle; }
+
+  // Inject notes boxes into every section and restore saved notes
+  SECTION_IDS.forEach(function (id) {
+    var section = document.getElementById(id);
+    if (!section) { return; }
+    var box = document.createElement('div');
+    box.className = 'notes-box';
+    box.innerHTML =
+      '<div class="notes-heading">📝 Notes</div>' +
+      '<textarea class="notes-textarea" data-section-id="' + id + '"' +
+      ' placeholder="Add your notes here\u2026"></textarea>';
+    section.appendChild(box);
+    var ta = box.querySelector('.notes-textarea');
+    var saved = localStorage.getItem(LS_PREFIX + 'notes_' + id);
+    if (saved) { ta.value = saved; }
+    ta.addEventListener('input', function () {
+      localStorage.setItem(LS_PREFIX + 'notes_' + id, ta.value);
+    });
+  });
+
+  // Rename title
+  document.getElementById('btn-rename').addEventListener('click', function () {
+    var current = titleEl.textContent;
+    var newTitle = prompt('Enter new document title (leave blank to reset to default):', current);
+    if (newTitle === null) { return; } // cancelled
+    var trimmed = newTitle.trim();
+    if (trimmed === '' || trimmed === DEFAULT_TITLE) {
+      localStorage.removeItem(LS_PREFIX + 'title');
+      titleEl.textContent = DEFAULT_TITLE;
+    } else {
+      localStorage.setItem(LS_PREFIX + 'title', trimmed);
+      titleEl.textContent = trimmed;
+    }
+  });
+
+  // Export
+  document.getElementById('btn-export').addEventListener('click', function () {
+    var notes = {};
+    SECTION_IDS.forEach(function (id) {
+      notes[id] = localStorage.getItem(LS_PREFIX + 'notes_' + id) || '';
+    });
+    var data = {
+      title: titleEl.textContent,
+      notes: notes,
+      exportDate: new Date().toISOString()
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var d = new Date();
+    var dateStamp = d.getFullYear() +
+             ('0' + (d.getMonth() + 1)).slice(-2) +
+             ('0' + d.getDate()).slice(-2);
+    a.href = url;
+    a.download = 'sp_tape_config_notes_' + dateStamp + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Import
+  var importInput = document.getElementById('import-file-input');
+  document.getElementById('btn-import').addEventListener('click', function () {
+    importInput.click();
+  });
+
+  function showImportConfirm(msg, isError) {
+    var el = document.getElementById('import-confirm');
+    el.textContent = msg;
+    el.className = 'import-confirm' + (isError ? ' import-error' : '');
+    el.style.display = 'inline';
+    setTimeout(function () { el.style.display = 'none'; }, 3000);
+  }
+
+  importInput.addEventListener('change', function () {
+    var file = importInput.files[0];
+    if (!file) { return; }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        if (typeof data !== 'object' || !data.notes) { throw new Error('Invalid JSON format: missing required notes field'); }
+        if (data.title) {
+          localStorage.setItem(LS_PREFIX + 'title', data.title);
+          titleEl.textContent = data.title;
+        }
+        SECTION_IDS.forEach(function (id) {
+          var val = (data.notes && typeof data.notes[id] === 'string') ? data.notes[id] : '';
+          localStorage.setItem(LS_PREFIX + 'notes_' + id, val);
+          var ta = document.querySelector('.notes-textarea[data-section-id="' + id + '"]');
+          if (ta) { ta.value = val; }
+        });
+        showImportConfirm('✓ Import successful');
+      } catch (err) {
+        showImportConfirm('⚠ Import failed: ' + err.message, true);
+      }
+      importInput.value = '';
+    };
+    reader.readAsText(file);
   });
 </script>
 </body>
