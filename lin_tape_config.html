@@ -477,6 +477,7 @@
       <li data-section="driver-install"><a href="#driver-install"><span class="nav-icon">📦</span><span class="nav-label">lin_tape Driver Installation</span></a></li>
       <li data-section="daemon"><a href="#daemon"><span class="nav-icon">🔧</span><span class="nav-label">lin_taped Daemon Management</span></a></li>
       <li data-section="boot"><a href="#boot"><span class="nav-icon">🔄</span><span class="nav-label">Boot Persistence</span></a></li>
+      <li data-section="tsmscsi"><a href="#tsmscsi"><span class="nav-icon">🔧</span><span class="nav-label">tsmscsi Autoconf &amp; Permissions</span></a></li>
       <li data-section="discovery"><a href="#discovery"><span class="nav-icon">🖥️</span><span class="nav-label">Device Discovery</span></a></li>
       <li data-section="udev"><a href="#udev"><span class="nav-icon">🔗</span><span class="nav-label">Persistent Device Binding (udev)</span></a></li>
       <li data-section="dual-path"><a href="#dual-path"><span class="nav-icon">🔀</span><span class="nav-label">Dual-Pathed Drives</span></a></li>
@@ -869,6 +870,207 @@ WantedBy=multi-user.target</pre>
           <div class="cmd-label">Verify boot persistence</div>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">systemctl is-enabled lin_tape_load 2&gt;/dev/null || systemctl is-enabled lin_tape 2&gt;/dev/null</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================== -->
+    <!-- tsmscsi Autoconf & Permissions        -->
+    <!-- ===================================== -->
+    <section id="tsmscsi" class="section">
+      <div class="section-title"><span>🔧</span> tsmscsi Autoconf &amp; Permissions</div>
+      <p class="section-desc">Configure the IBM Storage Protect tsmscsi autoconf utility to create <code>/dev/tsmscsi/</code> device nodes at boot and fix the permissions issue that prevents the SP instance user from accessing the medium changer device.</p>
+      <div class="copy-all-wrap">
+        <button class="btn btn-primary copy-all-btn" data-section="tsmscsi">📋 Copy All Commands</button>
+      </div>
+
+      <div class="subsection">
+        <h3>What is tsmscsi autoconf?</h3>
+        <div class="callout callout-info">
+          <strong>ℹ How it works:</strong> The <code>autoconf</code> utility (<code>/opt/tivoli/tsm/devices/bin/autoconf -a</code>) scans all SCSI devices and creates device nodes under <code>/dev/tsmscsi/</code>. The most important is <code>/dev/tsmscsi/lb0</code> — the medium changer (library) device that Storage Protect uses in <code>DEFINE LIBRARY ... DEVICE=/dev/tsmscsi/lb0</code>. This is <strong>separate</strong> from the lin_tape driver — lin_tape handles tape drives (<code>/dev/IBMtape*</code>), while tsmscsi handles the library changer. The <code>autoconf</code> utility requires the <code>sg</code> (SCSI generic) kernel module to be loaded.
+        </div>
+        <div class="callout callout-warn">
+          <strong>⚠ Permissions Issue:</strong> By default, <code>autoconf -a</code> creates device nodes with root-only permissions (<code>0600</code> or <code>0660</code>). If your SP server instance runs as a non-root user (e.g., <code>tsminst1</code>), it will <strong>not</strong> be able to open the changer device — causing <code>DEFINE LIBRARY</code> and <code>AUDIT LIBRARY</code> operations to fail with permission errors. The fix is to <code>chmod</code> the device nodes after <code>autoconf</code> runs.
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Check Current State</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if autoconf exists</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /opt/tivoli/tsm/devices/bin/autoconf</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if sg module is loaded</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lsmod | grep sg</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">List current tsmscsi device nodes</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/tsmscsi/</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check tsmscsi library info</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /dev/tsmscsi/lbinfo 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check current permissions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">stat -c '%a %U:%G %n' /dev/tsmscsi/* 2&gt;/dev/null</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check what user SP runs as</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ps aux | grep dsmserv</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Run autoconf Manually</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Load sg module (required by autoconf)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">modprobe sg</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Run autoconf to scan all devices</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">/opt/tivoli/tsm/devices/bin/autoconf -a</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Fix permissions after autoconf</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">chmod -R 0666 /dev/tsmscsi/</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify permissions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/tsmscsi/</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Test access as tsminst1</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">su - tsminst1 -c 'cat /dev/tsmscsi/lbinfo'</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>systemd Service (Boot Persistence)</h3>
+        <div class="callout callout-info">
+          <strong>ℹ Why a systemd service?</strong> The <code>/dev/tsmscsi/</code> device nodes do not persist across reboots — they must be recreated each time. A systemd service ensures <code>autoconf -a</code> runs at every boot, creating the nodes before the SP server starts. The <code>ExecStartPost</code> line fixes permissions automatically.
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">File: /etc/systemd/system/tsmscsi-autoconf.service</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">[Unit]
+Description=IBM Storage Protect tsmscsi autoconf &mdash; recreate /dev/tsmscsi device nodes
+After=lin_tape_load.service lin_taped.service
+Before=tsminst1.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/sbin/modprobe sg
+ExecStart=/opt/tivoli/tsm/devices/bin/autoconf -a
+ExecStartPost=/bin/chmod -R 0666 /dev/tsmscsi/
+
+[Install]
+WantedBy=multi-user.target</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Create the service file (heredoc)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat &gt; /etc/systemd/system/tsmscsi-autoconf.service &lt;&lt;'EOF'
+[Unit]
+Description=IBM Storage Protect tsmscsi autoconf — recreate /dev/tsmscsi device nodes
+After=lin_tape_load.service lin_taped.service
+Before=tsminst1.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/sbin/modprobe sg
+ExecStart=/opt/tivoli/tsm/devices/bin/autoconf -a
+ExecStartPost=/bin/chmod -R 0666 /dev/tsmscsi/
+
+[Install]
+WantedBy=multi-user.target
+EOF</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Reload systemd and enable</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl daemon-reload &amp;&amp; systemctl enable tsmscsi-autoconf.service</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Start the service now</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl start tsmscsi-autoconf.service</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check service status</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">systemctl status tsmscsi-autoconf.service</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Verify device nodes created with correct permissions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/tsmscsi/</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Boot Order</h3>
+        <table class="attr-table">
+          <thead>
+            <tr><th>Order</th><th>Service</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>lin_tape_load.service</td><td>Load lin_tape kernel module</td></tr>
+            <tr><td>2</td><td>lin_taped.service</td><td>Start lin_tape daemon (creates <code>/dev/IBMtape*</code> nodes)</td></tr>
+            <tr><td>3</td><td>tsmscsi-autoconf.service</td><td>Run autoconf (creates <code>/dev/tsmscsi/</code> nodes + chmod)</td></tr>
+            <tr><td>4</td><td>tsminst1.service</td><td>Start IBM Storage Protect server instance</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subsection">
+        <h3>Troubleshooting</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if sg module loaded</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">lsmod | grep sg</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check systemd service logs</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">journalctl -u tsmscsi-autoconf.service --no-pager</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check if autoconf binary exists</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">file /opt/tivoli/tsm/devices/bin/autoconf</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Manually re-run autoconf and fix permissions</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">/opt/tivoli/tsm/devices/bin/autoconf -a &amp;&amp; chmod -R 0666 /dev/tsmscsi/</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check SP server can see changer</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">su - tsminst1 -c 'cat /dev/tsmscsi/lbinfo'</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Check dmesg for SCSI changer issues</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">dmesg | grep -i -E "changer|scsi|sg|autoconf" | tail -20</pre>
+        </div>
+        <div class="callout callout-error">
+          <strong>🚨 Common Error:</strong> If <code>autoconf -a</code> exits with no output or no devices found, ensure the <code>sg</code> kernel module is loaded (<code>modprobe sg</code>) and that the tape library is powered on and zoned to the server's FC HBA ports. Check <code>lsscsi -g</code> to verify the SCSI changer device is visible to the OS.
         </div>
       </div>
     </section>
@@ -2764,7 +2966,7 @@ echo "============================================="</pre>
   var LS_PREFIX = 'sp_tape_config_';
   var SECTION_IDS = [
     'reference', 'prerequisites', 'driver-install', 'daemon', 'boot',
-    'discovery', 'udev', 'dual-path', 'sp-config', 'failover',
+    'tsmscsi', 'discovery', 'udev', 'dual-path', 'sp-config', 'failover',
     'verification', 'diagnostics', 'document-system', 'db-restore'
   ];
 
