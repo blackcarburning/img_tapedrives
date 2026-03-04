@@ -621,6 +621,7 @@
     <button id="btn-rename" class="btn btn-header" title="Rename document title" aria-label="Rename document title">✏️ Rename</button>
     <button id="btn-export" class="btn btn-header" title="Export notes as JSON" aria-label="Export notes as JSON">📤 Export</button>
     <button id="btn-import" class="btn btn-header" title="Import notes from JSON" aria-label="Import notes from JSON">📥 Import</button>
+    <button id="btn-export-pdf" class="btn btn-header" title="Export all sections as PDF" aria-label="Export all sections as PDF">📄 PDF</button>
     <span id="import-confirm" class="import-confirm" style="display:none"></span>
     <input type="file" id="import-file-input" accept=".json" style="display:none" />
   </div>
@@ -3537,6 +3538,232 @@ echo "============================================="</pre>
       importInput.value = '';
     };
     reader.readAsText(file);
+  });
+
+  // PDF Export
+  document.getElementById('btn-export-pdf').addEventListener('click', function () {
+    // Sync active general notes textarea before export
+    var gnActiveTab = gnGetActiveTab();
+    if (gnActiveTab) { gnActiveTab.content = gnTextarea.value; }
+
+    var d = new Date();
+    var yr = d.getFullYear();
+    var mo = String(d.getMonth() + 1).padStart(2, '0');
+    var dy = String(d.getDate()).padStart(2, '0');
+    var hr = String(d.getHours()).padStart(2, '0');
+    var mn = String(d.getMinutes()).padStart(2, '0');
+    var dateStr = yr + mo + dy;
+    var timeStr = yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn;
+    var docTitle = titleEl.textContent.trim();
+    var pdfTitle = 'SP_Tape_Config_' + dateStr;
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function buildSectionHtml(sectionEl, isFirst) {
+      var out = [];
+      var pageBreak = isFirst ? '' : ' style="page-break-before:always"';
+      out.push('<div class="pdf-section"' + pageBreak + '>');
+
+      // Title
+      var titleNode = sectionEl.querySelector('.section-title');
+      if (titleNode) {
+        out.push('<h2 class="pdf-section-title">' + escHtml(titleNode.textContent.trim()) + '</h2>');
+      }
+
+      // Description
+      var descNode = sectionEl.querySelector('.section-desc');
+      if (descNode) {
+        out.push('<p class="pdf-section-desc">' + escHtml(descNode.textContent.trim()) + '</p>');
+      }
+
+      // Walk subsections
+      var subsections = sectionEl.querySelectorAll('.subsection');
+      subsections.forEach(function (sub) {
+        out.push('<div class="pdf-subsection">');
+
+        // h3 heading
+        var h3 = sub.querySelector('h3');
+        if (h3) {
+          out.push('<h3>' + escHtml(h3.textContent.trim()) + '</h3>');
+        }
+
+        // Command blocks
+        sub.querySelectorAll('.cmd-block').forEach(function (cmd) {
+          var label = cmd.querySelector('.cmd-label');
+          var pre = cmd.querySelector('.cmd-pre');
+          out.push('<div class="pdf-cmd-block">');
+          if (label) { out.push('<div class="pdf-cmd-label">' + escHtml(label.textContent.trim()) + '</div>'); }
+          if (pre) { out.push('<pre class="pdf-cmd-pre">' + escHtml(pre.textContent) + '</pre>'); }
+          out.push('</div>');
+        });
+
+        // Callout boxes
+        sub.querySelectorAll('.callout').forEach(function (callout) {
+          var type = 'info';
+          if (callout.classList.contains('callout-warn')) { type = 'warn'; }
+          else if (callout.classList.contains('callout-error')) { type = 'error'; }
+          else if (callout.classList.contains('callout-ok')) { type = 'ok'; }
+          out.push('<div class="pdf-callout pdf-callout-' + type + '">' + escHtml(callout.textContent.trim()) + '</div>');
+        });
+
+        // Tables
+        sub.querySelectorAll('.attr-table').forEach(function (tbl) {
+          out.push('<table class="pdf-table">');
+          var headers = tbl.querySelectorAll('th');
+          if (headers.length) {
+            out.push('<thead><tr>');
+            headers.forEach(function (th) { out.push('<th>' + escHtml(th.textContent.trim()) + '</th>'); });
+            out.push('</tr></thead>');
+          }
+          var rows = tbl.querySelectorAll('tbody tr');
+          if (rows.length) {
+            out.push('<tbody>');
+            rows.forEach(function (row) {
+              out.push('<tr>');
+              row.querySelectorAll('td').forEach(function (td) { out.push('<td>' + escHtml(td.textContent.trim()) + '</td>'); });
+              out.push('</tr>');
+            });
+            out.push('</tbody>');
+          }
+          out.push('</table>');
+        });
+
+        // Checklists
+        sub.querySelectorAll('.checklist').forEach(function (cl) {
+          out.push('<ul class="pdf-checklist">');
+          cl.querySelectorAll('li').forEach(function (li) {
+            var checked = li.classList.contains('checked') || (li.querySelector('input[type=checkbox]') && li.querySelector('input[type=checkbox]').checked);
+            out.push('<li>' + (checked ? '☑' : '☐') + ' ' + escHtml(li.textContent.trim()) + '</li>');
+          });
+          out.push('</ul>');
+        });
+
+        // Reference links
+        sub.querySelectorAll('a[href]').forEach(function (a) {
+          var href = a.getAttribute('href');
+          if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+            out.push('<div class="pdf-ref-link"><span>' + escHtml(a.textContent.trim()) + '</span>: <span class="pdf-ref-url">' + escHtml(href) + '</span></div>');
+          }
+        });
+
+        // ASCII art / pre blocks (not cmd-pre)
+        sub.querySelectorAll('pre:not(.cmd-pre)').forEach(function (pre) {
+          out.push('<pre class="pdf-ascii">' + escHtml(pre.textContent) + '</pre>');
+        });
+
+        out.push('</div>'); // subsection
+      });
+
+      // Also handle top-level cmd-blocks/callouts/tables not inside a subsection
+      sectionEl.querySelectorAll(':scope > .cmd-block').forEach(function (cmd) {
+        var label = cmd.querySelector('.cmd-label');
+        var pre = cmd.querySelector('.cmd-pre');
+        out.push('<div class="pdf-cmd-block">');
+        if (label) { out.push('<div class="pdf-cmd-label">' + escHtml(label.textContent.trim()) + '</div>'); }
+        if (pre) { out.push('<pre class="pdf-cmd-pre">' + escHtml(pre.textContent) + '</pre>'); }
+        out.push('</div>');
+      });
+
+      // Per-section notes (read from textarea value)
+      var ta = sectionEl.querySelector('.notes-textarea');
+      if (ta && ta.value.trim()) {
+        out.push('<div class="pdf-notes"><div class="pdf-notes-heading">📝 Notes</div><div class="pdf-notes-content">' + escHtml(ta.value.trim()) + '</div></div>');
+      }
+
+      out.push('</div>'); // pdf-section
+      return out.join('\n');
+    }
+
+    // Build General Notes section
+    function buildGeneralNotesHtml(isFirst) {
+      if (!gnData || !gnData.tabs || gnData.tabs.length === 0) { return ''; }
+      var hasContent = gnData.tabs.some(function (t) { return t.content && t.content.trim(); });
+      if (!hasContent) { return ''; }
+      var pageBreak = isFirst ? '' : ' style="page-break-before:always"';
+      var out = ['<div class="pdf-section"' + pageBreak + '>'];
+      out.push('<h2 class="pdf-section-title">📝 General Notes</h2>');
+      gnData.tabs.forEach(function (tab) {
+        if (!tab.content || !tab.content.trim()) { return; }
+        out.push('<h3>' + escHtml(tab.name || 'Tab') + '</h3>');
+        out.push('<div class="pdf-notes-content">' + escHtml(tab.content.trim()) + '</div>');
+      });
+      out.push('</div>');
+      return out.join('\n');
+    }
+
+    // Assemble all sections
+    var bodyParts = [];
+    var isFirst = true;
+    SECTION_IDS.forEach(function (id) {
+      if (id === 'general-notes') {
+        var gnHtml = buildGeneralNotesHtml(isFirst);
+        if (gnHtml) { bodyParts.push(gnHtml); isFirst = false; }
+        return;
+      }
+      var sectionEl = document.getElementById(id);
+      if (!sectionEl) { return; }
+      bodyParts.push(buildSectionHtml(sectionEl, isFirst));
+      isFirst = false;
+    });
+
+    var fullHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n' +
+      '<title>' + escHtml(pdfTitle) + '</title>\n' +
+      '<style>\n' +
+      '@page { margin: 15mm; }\n' +
+      'body { font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; background: #fff; color: #111; font-size: 13px; margin: 0; padding: 0; }\n' +
+      '.pdf-header { border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 16px; }\n' +
+      '.pdf-header h1 { font-size: 20px; margin: 0 0 4px; }\n' +
+      '.pdf-timestamp { font-size: 11px; color: #555; }\n' +
+      '.pdf-section { margin-bottom: 24px; }\n' +
+      '.pdf-section-title { font-size: 18px; font-weight: 700; color: #111; border-bottom: 1px solid #ccc; padding-bottom: 6px; margin-bottom: 10px; }\n' +
+      '.pdf-section-desc { color: #444; font-size: 12px; margin-bottom: 14px; }\n' +
+      '.pdf-subsection { margin-bottom: 18px; }\n' +
+      '.pdf-subsection h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #555; margin: 12px 0 6px; }\n' +
+      '.pdf-cmd-block { margin-bottom: 10px; page-break-inside: avoid; }\n' +
+      '.pdf-cmd-label { font-weight: 700; color: #333; font-size: 12px; margin-bottom: 3px; }\n' +
+      '.pdf-cmd-pre { font-family: \'Courier New\', Courier, monospace; font-size: 12px; background: #f5f5f5; border: 1px solid #ddd; padding: 8px 12px; margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }\n' +
+      '.pdf-callout { padding: 8px 12px; margin-bottom: 10px; border-left: 4px solid #0066cc; background: #fff; page-break-inside: avoid; font-size: 12px; }\n' +
+      '.pdf-callout-warn { border-left-color: #cc8800; }\n' +
+      '.pdf-callout-error { border-left-color: #cc0000; }\n' +
+      '.pdf-callout-ok { border-left-color: #008844; }\n' +
+      '.pdf-table { border-collapse: collapse; width: 100%; margin-bottom: 12px; font-size: 12px; page-break-inside: avoid; }\n' +
+      '.pdf-table th { background: #eee; font-weight: 600; text-align: left; padding: 6px 10px; border: 1px solid #bbb; }\n' +
+      '.pdf-table td { padding: 5px 10px; border: 1px solid #bbb; }\n' +
+      '.pdf-table tbody tr:nth-child(even) td { background: #f9f9f9; }\n' +
+      '.pdf-checklist { list-style: none; padding: 0; margin-bottom: 10px; font-size: 12px; }\n' +
+      '.pdf-checklist li { padding: 2px 0; }\n' +
+      '.pdf-ref-link { font-size: 11px; color: #333; margin-bottom: 4px; }\n' +
+      '.pdf-ref-url { color: #0055aa; }\n' +
+      '.pdf-ascii { font-family: \'Courier New\', Courier, monospace; font-size: 11px; background: #f5f5f5; border: 1px solid #ddd; padding: 8px 12px; white-space: pre; margin-bottom: 10px; }\n' +
+      '.pdf-notes { background: #fffde7; border: 1px solid #f0e68c; padding: 10px 14px; margin-top: 14px; page-break-inside: avoid; }\n' +
+      '.pdf-notes-heading { font-weight: 700; font-size: 13px; margin-bottom: 6px; }\n' +
+      '.pdf-notes-content { white-space: pre-wrap; font-size: 12px; color: #333; }\n' +
+      '@media print {\n' +
+      '  .pdf-cmd-block, .pdf-callout, .pdf-table, .pdf-notes { page-break-inside: avoid; }\n' +
+      '  .pdf-table tr { page-break-inside: avoid; }\n' +
+      '}\n' +
+      '</style>\n</head>\n<body>\n' +
+      '<div class="pdf-header"><h1>' + escHtml(docTitle) + '</h1>' +
+      '<div class="pdf-timestamp">Exported: ' + escHtml(timeStr) + '</div></div>\n' +
+      bodyParts.join('\n') +
+      '\n</body>\n</html>';
+
+    var printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Pop-up blocked. Please allow pop-ups for this page and try again.');
+      return;
+    }
+    printWin.document.write(fullHtml);
+    printWin.document.close();
+    printWin.document.title = pdfTitle;
+    printWin.onload = function () { printWin.print(); };
+    setTimeout(function () { printWin.print(); }, 500);
   });
 </script>
 </body>
