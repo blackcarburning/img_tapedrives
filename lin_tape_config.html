@@ -740,12 +740,12 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">File: /etc/modprobe.d/lin_tape.conf</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">options lin_tape alternate_pathing=1</pre>
+          <pre class="cmd-pre">options lin_tape alternate_pathing=0</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Create modprobe options file</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">echo "options lin_tape alternate_pathing=1" &gt; /etc/modprobe.d/lin_tape.conf</pre>
+          <pre class="cmd-pre">echo "options lin_tape alternate_pathing=0" &gt; /etc/modprobe.d/lin_tape.conf</pre>
         </div>
       </div>
 
@@ -822,9 +822,28 @@ WantedBy=multi-user.target</pre>
           <pre class="cmd-pre">ls -la /dev/IBMchanger*</pre>
         </div>
         <div class="cmd-block">
+          <div class="cmd-label">List TSM SCSI changer devices (tsmscsi driver)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">ls -la /dev/tsmscsi</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Read TSM SCSI library info</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /dev/tsmscsi/lbinfo</pre>
+        </div>
+        <div class="cmd-block">
           <div class="cmd-label">List all SCSI devices</div>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">lsscsi -g</pre>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Serial Number Discovery (sysfs)</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">List all IBMtape devices with serial numbers via sysfs</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">for i in $(ls /sys/class/lin_tape/ | grep IBMtape | grep -v n); do echo "$i: $(cat /sys/class/lin_tape/$i/serial_num)"; done</pre>
         </div>
       </div>
 
@@ -886,29 +905,81 @@ done</pre>
     <!-- ===================================== -->
     <section id="udev" class="section">
       <div class="section-title"><span>🔗</span> Persistent Device Binding (udev)</div>
-      <p class="section-desc">Create stable symlinks under <code>/dev/tsmtape/</code> so Storage Protect always finds the same device paths, even if kernel device numbering changes.</p>
+      <p class="section-desc">Create stable symlinks under <code>/dev/lin_tape/</code> so Storage Protect always finds the same device paths, even if kernel device numbering changes across reboots.</p>
       <div class="copy-all-wrap">
         <button class="btn btn-primary copy-all-btn" data-section="udev">📋 Copy All Commands</button>
       </div>
 
+      <div class="callout callout-info">
+        <strong>ℹ GB-UXB-LTSMP-P1 Implementation Note:</strong> The rules below are the actual deployed rules for the Spectra Logic TFinity Library on GB-UXB-LTSMP-P1. Key differences from a generic template: the rules file is <code>/etc/udev/rules.d/98-lin_tape.rules</code>, the serial number attribute is <code>ATTRS{serial_num}</code> (read from <code>/sys/class/lin_tape/IBMtapeX/serial_num</code>), symlinks are created under <code>/dev/lin_tape/</code>, and there is no dual-path matching (<code>alternate_pathing=0</code>).
+      </div>
+
       <div class="subsection">
-        <h3>udev Rules Template</h3>
+        <h3>Discover Serial Numbers via sysfs</h3>
+        <div class="callout callout-info">
+          <strong>How to find serial numbers:</strong> The <code>serial_num</code> attribute used in the udev rules comes from the lin_tape sysfs interface at <code>/sys/class/lin_tape/IBMtapeX/serial_num</code>. Run the command below after loading lin_tape to enumerate all drives and their serial numbers. Use these values to populate or verify your udev rules.
+        </div>
         <div class="cmd-block">
-          <div class="cmd-label">File: /etc/udev/rules.d/99-ibm-tape-persist.rules</div>
+          <div class="cmd-label">List all IBMtape devices with serial numbers (via sysfs)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre"># IBM Storage Protect — Persistent tape device symlinks
-# Library: Spectra Logic with IBM LTO drives (dual-pathed)
+          <pre class="cmd-pre">for i in $(ls /sys/class/lin_tape/ | grep IBMtape | grep -v n); do echo "$i: $(cat /sys/class/lin_tape/$i/serial_num)"; done</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Get serial number for a specific device</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">cat /sys/class/lin_tape/IBMtape0/serial_num</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Walk sysfs attributes (confirm ATTRS{serial_num} match key)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">udevadm info --attribute-walk --name=/dev/IBMtape0 | grep serial</pre>
+        </div>
+      </div>
 
-# --- Medium Changer (Library) ---
-KERNEL=="IBMchanger[0-9]*", ATTRS{serial}=="LIBRARY_SERIAL", SYMLINK+="tsmtape/library0"
+      <div class="subsection">
+        <h3>udev Rules — GB-UXB-LTSMP-P1 (Spectra Logic TFinity, 24 drives)</h3>
+        <div class="cmd-block">
+          <div class="cmd-label">File: /etc/udev/rules.d/98-lin_tape.rules</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre"># Spectra Logic TFinity Library — GB-UXB-LTSMP-P1
+# Persistent tape device symlinks by drive serial number
+# Maps physical library position to stable /dev/lin_tape/IBMtapeN names
 
-# --- Drive 01 (serial: DRIVE01_SERIAL) ---
-KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE01_SERIAL", ENV{ID_PATH}=="*-lun-0", SYMLINK+="tsmtape/drive01_path0"
-KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE01_SERIAL", ENV{ID_PATH}=="*-lun-1", SYMLINK+="tsmtape/drive01_path1"
+# FR1/DBA1 (Drives 1-4)
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1011003CBC", SYMLINK="lin_tape/IBMtape1", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1012003CBC", SYMLINK="lin_tape/IBMtape2", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1013003CBC", SYMLINK="lin_tape/IBMtape3", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1014003CBC", SYMLINK="lin_tape/IBMtape4", MODE="0666"
 
-# --- Drive 02 (serial: DRIVE02_SERIAL) ---
-KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-0", SYMLINK+="tsmtape/drive02_path0"
-KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1", SYMLINK+="tsmtape/drive02_path1"</pre>
+# FR1/DBA2 (Drives 5-8)
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1021003CBC", SYMLINK="lin_tape/IBMtape5", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1022003CBC", SYMLINK="lin_tape/IBMtape6", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1023003CBC", SYMLINK="lin_tape/IBMtape7", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1024003CBC", SYMLINK="lin_tape/IBMtape8", MODE="0666"
+
+# FR1/DBA3 (Drives 9-12)
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1031003CBC", SYMLINK="lin_tape/IBMtape9", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1032003CBC", SYMLINK="lin_tape/IBMtape10", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1033003CBC", SYMLINK="lin_tape/IBMtape11", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1034003CBC", SYMLINK="lin_tape/IBMtape12", MODE="0666"
+
+# FR1/DBA4 (Drives 13-16)
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1041003CBC", SYMLINK="lin_tape/IBMtape13", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1042003CBC", SYMLINK="lin_tape/IBMtape14", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1043003CBC", SYMLINK="lin_tape/IBMtape15", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1044003CBC", SYMLINK="lin_tape/IBMtape16", MODE="0666"
+
+# FR1/DBA5 (Drives 17-20)
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1051003CBC", SYMLINK="lin_tape/IBMtape17", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1052003CBC", SYMLINK="lin_tape/IBMtape18", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1053003CBC", SYMLINK="lin_tape/IBMtape19", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1054003CBC", SYMLINK="lin_tape/IBMtape20", MODE="0666"
+
+# FR1/DBA6 (Drives 21-24)
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1061003CBC", SYMLINK="lin_tape/IBMtape21", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1062003CBC", SYMLINK="lin_tape/IBMtape22", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1063003CBC", SYMLINK="lin_tape/IBMtape23", MODE="0666"
+KERNEL=="IBMtape*[!n]", ATTRS{serial_num}=="1064003CBC", SYMLINK="lin_tape/IBMtape24", MODE="0666"</pre>
         </div>
       </div>
 
@@ -917,7 +988,7 @@ KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1
         <div class="cmd-block">
           <div class="cmd-label">Create symlink directory</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">mkdir -p /dev/tsmtape</pre>
+          <pre class="cmd-pre">mkdir -p /dev/lin_tape</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Reload udev rules and trigger</div>
@@ -927,13 +998,48 @@ KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1
         <div class="cmd-block">
           <div class="cmd-label">Verify symlinks created</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">ls -la /dev/tsmtape/</pre>
+          <pre class="cmd-pre">ls -la /dev/lin_tape/</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Check symlink targets</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">readlink -f /dev/tsmtape/*</pre>
+          <pre class="cmd-pre">readlink -f /dev/lin_tape/*</pre>
         </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Drive Alignment Reference Table — GB-UXB-LTSMP-P1</h3>
+        <table class="attr-table">
+          <thead>
+            <tr><th>SP Drive</th><th>udev Symlink</th><th>Serial (ATTRS{serial_num})</th><th>Library Position</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>TAPE01_PRIM</td><td>/dev/lin_tape/IBMtape1</td><td>1011003CBC</td><td>FR1/DBA1 Drive 1</td></tr>
+            <tr><td>TAPE02_PRIM</td><td>/dev/lin_tape/IBMtape2</td><td>1012003CBC</td><td>FR1/DBA1 Drive 2</td></tr>
+            <tr><td>TAPE03_PRIM</td><td>/dev/lin_tape/IBMtape3</td><td>1013003CBC</td><td>FR1/DBA1 Drive 3</td></tr>
+            <tr><td>TAPE04_PRIM</td><td>/dev/lin_tape/IBMtape4</td><td>1014003CBC</td><td>FR1/DBA1 Drive 4</td></tr>
+            <tr><td>TAPE05_PRIM</td><td>/dev/lin_tape/IBMtape5</td><td>1021003CBC</td><td>FR1/DBA2 Drive 1</td></tr>
+            <tr><td>TAPE06_PRIM</td><td>/dev/lin_tape/IBMtape6</td><td>1022003CBC</td><td>FR1/DBA2 Drive 2</td></tr>
+            <tr><td>TAPE07_PRIM</td><td>/dev/lin_tape/IBMtape7</td><td>1023003CBC</td><td>FR1/DBA2 Drive 3</td></tr>
+            <tr><td>TAPE08_PRIM</td><td>/dev/lin_tape/IBMtape8</td><td>1024003CBC</td><td>FR1/DBA2 Drive 4</td></tr>
+            <tr><td>TAPE09_PRIM</td><td>/dev/lin_tape/IBMtape9</td><td>1031003CBC</td><td>FR1/DBA3 Drive 1</td></tr>
+            <tr><td>TAPE10_PRIM</td><td>/dev/lin_tape/IBMtape10</td><td>1032003CBC</td><td>FR1/DBA3 Drive 2</td></tr>
+            <tr><td>TAPE11_PRIM</td><td>/dev/lin_tape/IBMtape11</td><td>1033003CBC</td><td>FR1/DBA3 Drive 3</td></tr>
+            <tr><td>TAPE12_PRIM</td><td>/dev/lin_tape/IBMtape12</td><td>1034003CBC</td><td>FR1/DBA3 Drive 4</td></tr>
+            <tr><td>TAPE13_PRIM</td><td>/dev/lin_tape/IBMtape13</td><td>1041003CBC</td><td>FR1/DBA4 Drive 1</td></tr>
+            <tr><td>TAPE14_PRIM</td><td>/dev/lin_tape/IBMtape14</td><td>1042003CBC</td><td>FR1/DBA4 Drive 2</td></tr>
+            <tr><td>TAPE15_PRIM</td><td>/dev/lin_tape/IBMtape15</td><td>1043003CBC</td><td>FR1/DBA4 Drive 3</td></tr>
+            <tr><td>TAPE16_PRIM</td><td>/dev/lin_tape/IBMtape16</td><td>1044003CBC</td><td>FR1/DBA4 Drive 4</td></tr>
+            <tr><td>TAPE17_PRIM</td><td>/dev/lin_tape/IBMtape17</td><td>1051003CBC</td><td>FR1/DBA5 Drive 1</td></tr>
+            <tr><td>TAPE18_PRIM</td><td>/dev/lin_tape/IBMtape18</td><td>1052003CBC</td><td>FR1/DBA5 Drive 2</td></tr>
+            <tr><td>TAPE19_PRIM</td><td>/dev/lin_tape/IBMtape19</td><td>1053003CBC</td><td>FR1/DBA5 Drive 3</td></tr>
+            <tr><td>TAPE20_PRIM</td><td>/dev/lin_tape/IBMtape20</td><td>1054003CBC</td><td>FR1/DBA5 Drive 4</td></tr>
+            <tr><td>TAPE21_PRIM</td><td>/dev/lin_tape/IBMtape21</td><td>1061003CBC</td><td>FR1/DBA6 Drive 1</td></tr>
+            <tr><td>TAPE22_PRIM</td><td>/dev/lin_tape/IBMtape22</td><td>1062003CBC</td><td>FR1/DBA6 Drive 2</td></tr>
+            <tr><td>TAPE23_PRIM</td><td>/dev/lin_tape/IBMtape23</td><td>1063003CBC</td><td>FR1/DBA6 Drive 3</td></tr>
+            <tr><td>TAPE24_PRIM</td><td>/dev/lin_tape/IBMtape24</td><td>1064003CBC</td><td>FR1/DBA6 Drive 4</td></tr>
+          </tbody>
+        </table>
       </div>
 
       <div class="subsection">
@@ -943,10 +1049,10 @@ KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1
             <tr><th>Attribute</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td>ATTRS{serial}</td><td>Drive serial number (most reliable key)</td></tr>
+            <tr><td>ATTRS{serial_num}</td><td>Drive serial number from lin_tape sysfs — most reliable key for IBMtape devices</td></tr>
             <tr><td>ATTRS{vendor}</td><td>e.g. 'IBM'</td></tr>
             <tr><td>ATTRS{model}</td><td>e.g. 'ULT3580-HH9' (LTO-9)</td></tr>
-            <tr><td>ENV{ID_PATH}</td><td>HBA path identifier — use for dual-path matching</td></tr>
+            <tr><td>ENV{ID_PATH}</td><td>HBA path identifier — use for dual-path matching (not used here)</td></tr>
             <tr><td>ENV{ID_SCSI_SERIAL}</td><td>SCSI serial string</td></tr>
             <tr><td>ENV{ID_SERIAL_SHORT}</td><td>Short serial number</td></tr>
           </tbody>
@@ -962,6 +1068,10 @@ KERNEL=="IBMtape[0-9]*", ATTRS{serial}=="DRIVE02_SERIAL", ENV{ID_PATH}=="*-lun-1
       <p class="section-desc">Configure IBM lin_tape alternate pathing for dual-connected tape drives. When enabled, the driver consolidates multiple physical paths into a single logical device — failover is handled transparently at the driver level, so IBM Storage Protect paths do not need to change.</p>
       <div class="copy-all-wrap">
         <button class="btn btn-primary copy-all-btn" data-section="dual-path">📋 Copy All Commands</button>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠ GB-UXB-LTSMP-P1 Finding — alternate_pathing=1 did NOT work:</strong> On the Spectra Logic TFinity library, all drives showed <code>Alternate: NA</code> in <code>/proc/scsi/IBMtape</code> when <code>alternate_pathing=1</code> was set — the lin_tape driver did not detect or consolidate alternate paths for these drives. As a result, <code>alternate_pathing=0</code> is used instead. Stable device naming across reboots is guaranteed by the udev persistent symlink approach under <code>/dev/lin_tape/</code> (see the <a href="#udev">Persistent Device Binding (udev)</a> section). The content below is retained for reference for systems where alternate pathing does function correctly.
       </div>
 
       <div class="subsection">
@@ -1135,8 +1245,8 @@ EOF</pre>
       </div>
 
       <div class="callout callout-warn">
-        <strong>⚠ Placeholder Values</strong>
-        Replace <code>SERVERNAME</code>, <code>ADMIN</code>, <code>PASSWORD</code>, <code>SPECTRALIB</code>, element addresses, and serial numbers with your actual values before running these commands.
+        <strong>⚠ GB-UXB-LTSMP-P1 Configuration</strong>
+        The commands below are the actual configuration used on GB-UXB-LTSMP-P1. Replace <code>ADMIN</code> and <code>PASSWORD</code> with your actual SP credentials. The library changer uses the TSM SCSI device driver path <code>/dev/tsmscsi/lb0</code> (not <code>/dev/IBMchanger*</code>).
       </div>
 
       <div class="subsection">
@@ -1158,31 +1268,76 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Define SCSI library</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">DEFINE LIBRARY SPECTRALIB LIBTYPE=SCSI</pre>
+          <pre class="cmd-pre">DEFINE LIBRARY SPECTRA_PRIM LIBTYPE=SCSI</pre>
         </div>
         <div class="cmd-block">
-          <div class="cmd-label">Define library path</div>
+          <div class="cmd-label">Define library path (uses TSM SCSI changer device)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">DEFINE PATH SERVERNAME SPECTRALIB SRCTYPE=SERVER DESTTYPE=LIBRARY DEVICE=/dev/tsmtape/library0 ONLINE=YES</pre>
+          <pre class="cmd-pre">DEFINE PATH ARDTSM1 SPECTRA_PRIM SRCTYPE=SERVER DESTTYPE=LIBRARY DEVICE=/dev/tsmscsi/lb0</pre>
         </div>
       </div>
 
       <div class="subsection">
-        <h3>Define Drives</h3>
+        <h3>Define Drives (all 24)</h3>
         <div class="cmd-block">
-          <div class="cmd-label">Define drive (ELEMENT= is the library element address)</div>
+          <div class="cmd-label">Define all 24 drives (no ELEMENT= — let SP auto-detect)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">DEFINE DRIVE SPECTRALIB DRIVE01 ELEMENT=256 CLEANFREQUENCY=ASNEEDED</pre>
+          <pre class="cmd-pre">DEFINE DRIVE SPECTRA_PRIM TAPE01_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE02_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE03_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE04_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE05_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE06_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE07_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE08_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE09_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE10_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE11_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE12_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE13_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE14_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE15_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE16_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE17_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE18_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE19_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE20_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE21_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE22_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE23_PRIM
+DEFINE DRIVE SPECTRA_PRIM TAPE24_PRIM</pre>
         </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Define Drive Paths (all 24)</h3>
         <div class="cmd-block">
-          <div class="cmd-label">Define primary drive path</div>
+          <div class="cmd-label">Define drive paths using persistent /dev/lin_tape/ symlinks</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">DEFINE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path0 ONLINE=YES</pre>
-        </div>
-        <div class="cmd-block">
-          <div class="cmd-label">Define secondary drive path (dual-path)</div>
-          <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">DEFINE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path1 ONLINE=YES</pre>
+          <pre class="cmd-pre">DEFINE PATH ARDTSM1 TAPE01_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape1
+DEFINE PATH ARDTSM1 TAPE02_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape2
+DEFINE PATH ARDTSM1 TAPE03_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape3
+DEFINE PATH ARDTSM1 TAPE04_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape4
+DEFINE PATH ARDTSM1 TAPE05_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape5
+DEFINE PATH ARDTSM1 TAPE06_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape6
+DEFINE PATH ARDTSM1 TAPE07_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape7
+DEFINE PATH ARDTSM1 TAPE08_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape8
+DEFINE PATH ARDTSM1 TAPE09_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape9
+DEFINE PATH ARDTSM1 TAPE10_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape10
+DEFINE PATH ARDTSM1 TAPE11_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape11
+DEFINE PATH ARDTSM1 TAPE12_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape12
+DEFINE PATH ARDTSM1 TAPE13_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape13
+DEFINE PATH ARDTSM1 TAPE14_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape14
+DEFINE PATH ARDTSM1 TAPE15_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape15
+DEFINE PATH ARDTSM1 TAPE16_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape16
+DEFINE PATH ARDTSM1 TAPE17_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape17
+DEFINE PATH ARDTSM1 TAPE18_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape18
+DEFINE PATH ARDTSM1 TAPE19_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape19
+DEFINE PATH ARDTSM1 TAPE20_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape20
+DEFINE PATH ARDTSM1 TAPE21_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape21
+DEFINE PATH ARDTSM1 TAPE22_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape22
+DEFINE PATH ARDTSM1 TAPE23_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape23
+DEFINE PATH ARDTSM1 TAPE24_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape24</pre>
         </div>
       </div>
 
@@ -1191,12 +1346,17 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Audit library (reads barcodes)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">AUDIT LIBRARY SPECTRALIB CHECKLABEL=BARCODE</pre>
+          <pre class="cmd-pre">AUDIT LIBRARY SPECTRA_PRIM CHECKLABEL=BARCODE</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Audit library (short form)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">AUDIT LIBRARY SPECTRA_PRIM</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Define LTO device class</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">DEFINE DEVCLASS LTO_DC DEVTYPE=LTO LIBRARY=SPECTRALIB FORMAT=DRIVE MOUNTRETENTION=60 MOUNTWAIT=60 MOUNTLIMIT=DRIVES</pre>
+          <pre class="cmd-pre">DEFINE DEVCLASS LTO_DC DEVTYPE=LTO LIBRARY=SPECTRA_PRIM FORMAT=DRIVE MOUNTRETENTION=60 MOUNTWAIT=60 MOUNTLIMIT=DRIVES</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Define storage pool</div>
@@ -1206,9 +1366,15 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Label and check in tapes from barcodes</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">LABEL LIBVOLUME SPECTRALIB SEARCH=YES LABELSOURCE=BARCODE CHECKIN=SCRATCH OVERWRITE=NO</pre>
+          <pre class="cmd-pre">LABEL LIBVOLUME SPECTRA_PRIM SEARCH=YES LABELSOURCE=BARCODE CHECKIN=SCRATCH OVERWRITE=NO</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Backup device configuration after setup</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">BACKUP DEVCONFIG</pre>
         </div>
       </div>
+
     </section>
 
     <!-- ===================================== -->
@@ -1219,6 +1385,10 @@ EOF</pre>
       <p class="section-desc">Configure and test control/data path failover with lin_tape's <code>alternate_pathing</code> feature.</p>
       <div class="copy-all-wrap">
         <button class="btn btn-primary copy-all-btn" data-section="failover">📋 Copy All Commands</button>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠ Not Applicable for GB-UXB-LTSMP-P1:</strong> This section describes dual-path failover using <code>alternate_pathing=1</code>. This feature was <strong>NOT used</strong> on GB-UXB-LTSMP-P1 — the Spectra Logic TFinity drives all showed <code>Alternate: NA</code> in <code>/proc/scsi/IBMtape</code>, meaning alternate pathing did not function with this hardware configuration. The system uses <code>alternate_pathing=0</code> and relies on udev persistent symlinks under <code>/dev/lin_tape/</code> to guarantee stable device naming across reboots instead. The content below is retained for reference if dual-pathing is ever enabled on other systems.
       </div>
 
       <div class="callout callout-error">
@@ -1245,17 +1415,17 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Take path0 offline (simulate failure)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "UPDATE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path0 ONLINE=NO"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "UPDATE PATH ARDTSM1 TAPE01_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape1 ONLINE=NO"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Query drive status (should show active on path1)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE SPECTRALIB DRIVE01 FORMAT=DETAILED"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE SPECTRA_PRIM TAPE01_PRIM FORMAT=DETAILED"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Restore path0 online</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "UPDATE PATH SERVERNAME DRIVE01 SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRALIB DEVICE=/dev/tsmtape/drive01_path0 ONLINE=YES"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "UPDATE PATH ARDTSM1 TAPE01_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape1 ONLINE=YES"</pre>
         </div>
       </div>
     </section>
@@ -1275,17 +1445,17 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Query library (detailed)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBRARY SPECTRALIB FORMAT=DETAILED"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBRARY SPECTRA_PRIM FORMAT=DETAILED"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Query library path</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH SERVERNAME SPECTRALIB SRCTYPE=SERVER DESTTYPE=LIBRARY"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY PATH ARDTSM1 SPECTRA_PRIM SRCTYPE=SERVER DESTTYPE=LIBRARY"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Query all drives</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE SPECTRALIB"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY DRIVE SPECTRA_PRIM"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Query all paths (detailed)</div>
@@ -1309,7 +1479,7 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Query library volumes (tape inventory)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBVOLUME SPECTRALIB"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY LIBVOLUME SPECTRA_PRIM"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Query volumes in pool</div>
@@ -1323,7 +1493,7 @@ EOF</pre>
         <div class="cmd-block">
           <div class="cmd-label">Test archive a file to tape</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmc archive /tmp/testfile -se=SERVERNAME</pre>
+          <pre class="cmd-pre">dsmc archive /tmp/testfile -se=ARDTSM1</pre>
         </div>
       </div>
     </section>
@@ -1352,7 +1522,7 @@ echo "=== Devices ==="
 ls -la /dev/IBMtape* /dev/IBMchanger* 2&gt;/dev/null
 echo ""
 echo "=== Symlinks ==="
-ls -la /dev/tsmtape/ 2&gt;/dev/null
+ls -la /dev/lin_tape/ 2&gt;/dev/null
 echo ""
 echo "=== FC HBAs ==="
 for h in /sys/class/fc_host/host*; do
@@ -1469,12 +1639,12 @@ dmesg | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20</pre>
         <div class="cmd-block">
           <div class="cmd-label">Persistent symlinks</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">ls -la /dev/tsmtape/ 2&gt;/dev/null</pre>
+          <pre class="cmd-pre">ls -la /dev/lin_tape/ 2&gt;/dev/null</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Resolve symlink targets</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">for link in /dev/tsmtape/*; do [ -L "$link" ] &amp;&amp; echo "$link -&gt; $(readlink -f $link)"; done 2&gt;/dev/null</pre>
+          <pre class="cmd-pre">for link in /dev/lin_tape/*; do [ -L "$link" ] &amp;&amp; echo "$link -&gt; $(readlink -f $link)"; done 2&gt;/dev/null</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">SCSI device list</div>
@@ -1484,7 +1654,7 @@ dmesg | grep -i -E "tape|IBMtape|lin_tape|changer" | tail -20</pre>
         <div class="cmd-block">
           <div class="cmd-label">udev rules for tape</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">cat /etc/udev/rules.d/99-ibm-tape-persist.rules 2&gt;/dev/null</pre>
+          <pre class="cmd-pre">cat /etc/udev/rules.d/98-lin_tape.rules 2&gt;/dev/null</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Device serial numbers</div>
@@ -1775,11 +1945,11 @@ ls -la /dev/IBMtape* /dev/IBMchanger* 2&gt;/dev/null || echo "(no devices)"
 echo ""
 
 echo "=== PERSISTENT SYMLINKS ==="
-ls -la /dev/tsmtape/ 2&gt;/dev/null || echo "(no symlinks)"
+ls -la /dev/lin_tape/ 2&gt;/dev/null || echo "(no symlinks)"
 echo ""
 
 echo "=== UDEV RULES ==="
-cat /etc/udev/rules.d/99-ibm-tape-persist.rules 2&gt;/dev/null || echo "(no rules file)"
+cat /etc/udev/rules.d/98-lin_tape.rules 2&gt;/dev/null || echo "(no rules file)"
 echo ""
 
 echo "=== DEVICE SERIALS ==="
@@ -1910,8 +2080,8 @@ echo "============================================="</pre>
         <div class="callout callout-info">
           <strong>You need three things to restore the SP database:</strong>
           <ol style="margin-top:8px;padding-left:20px">
-            <li><strong>Volume History file</strong> (<code>volhist.out</code>) — Records which tapes/volumes contain your DB backups.</li>
-            <li><strong>Device Configuration file</strong> (<code>devconfig.out</code>) — Defines the tape library, drives, and paths the server uses.</li>
+            <li><strong>Volume History file</strong> (<code>volhist.out</code>) — Records which tapes/volumes contain your DB backups. <em>Must come from the OLD server.</em></li>
+            <li><strong>Device Configuration file</strong> (<code>devconfig.out</code>) — Defines the tape library, drives, and paths. On a new/replacement server, this is generated <em>after</em> defining library/drives/paths (see the <a href="#sp-config">Storage Protect Configuration</a> section).</li>
             <li><strong>The physical backup tapes</strong> — The actual media referenced in the volume history.</li>
           </ol>
           <p style="margin-top:8px">These files should be backed up regularly and stored off-server. If they are lost, you may be able to reconstruct them, but this significantly complicates recovery.</p>
@@ -2018,7 +2188,7 @@ echo "============================================="</pre>
         <div class="cmd-block">
           <div class="cmd-label">Stop the SP server (if running)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "HALT" 2&gt;/dev/null; sleep 5; systemctl stop dsmserv 2&gt;/dev/null</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "HALT" 2&gt;/dev/null; sleep 5; systemctl stop tsminst1.service 2&gt;/dev/null</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Verify server is stopped</div>
@@ -2051,19 +2221,45 @@ echo "============================================="</pre>
           <pre class="cmd-pre">chown -R tsminst1:tsmsrvrs /tsmdb001 /tsmdb002 /tsmdb003 /tsm_activelog /tsm_archlog /tsm_archfaillog 2&gt;/dev/null</pre>
         </div>
         <div class="cmd-block">
-          <div class="cmd-label">Remove old database (if rebuilding from scratch)</div>
+          <div class="cmd-label">Remove old database (run as instance owner tsminst1, NOT root)</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmserv removedb TSMDB1</pre>
+          <pre class="cmd-pre">su - tsminst1 -c "dsmserv removedb TSMDB1"</pre>
         </div>
         <div class="callout callout-error">
-          <strong>⛔ <code>dsmserv removedb</code> is destructive.</strong> Only run this if you are certain the existing database is unrecoverable or you are building a fresh server to restore onto. This command permanently removes the database.
+          <strong>⛔ <code>dsmserv removedb</code> is destructive.</strong> Only run this if you are certain the existing database is unrecoverable or you are building a fresh server to restore onto. This command permanently removes the database. <strong>Must be run as the instance owner (<code>tsminst1</code>), not as root.</strong>
         </div>
       </div>
 
       <div class="subsection">
-        <h3>Restore the Database</h3>
+        <h3>Restore the Database — GB-UXB-LTSMP-P1 Actual Command</h3>
+        <div class="callout callout-info">
+          <strong>GB-UXB-LTSMP-P1 restore sequence:</strong>
+          <ol style="margin-top:8px;padding-left:20px">
+            <li>Issue <code>HALT</code> to stop the SP server</li>
+            <li>Run <code>dsmserv removedb TSMDB1</code> as instance owner (<code>tsminst1</code>)</li>
+            <li>Run <code>dsmserv restore db</code> as instance owner (<code>tsminst1</code>) with the parameters below</li>
+          </ol>
+          <p style="margin-top:8px">The <code>recov=</code> directory holds temporary recovery log data during the restore. The <code>on=</code> file lists the database directories (one per line). The <code>restorekeys=yes</code> parameter is required when database backups are encrypted.</p>
+        </div>
         <div class="cmd-block">
-          <div class="cmd-label">Restore to the most recent state (latest full + all incrementals)</div>
+          <div class="cmd-label">Actual restore command used on GB-UXB-LTSMP-P1 (run as tsminst1)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">su - tsminst1 -c "dsmserv restore db recov=/tsmarchlogfail/recoverydir on=/tsmarchlogfail/dbdirs.lst restorekeys=yes"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Full restore sequence (HALT → removedb → restore db)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre"># Step 1: Halt SP server
+dsmadmc -id=ADMIN -pa=PASSWORD "HALT"
+
+# Step 2: Remove existing database (as instance owner)
+su - tsminst1 -c "dsmserv removedb TSMDB1"
+
+# Step 3: Restore database (as instance owner)
+su - tsminst1 -c "dsmserv restore db recov=/tsmarchlogfail/recoverydir on=/tsmarchlogfail/dbdirs.lst restorekeys=yes"</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Restore to the most recent state — generic form</div>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">dsmserv restore db devconfig=devconfig.out volhistory=volhist.out</pre>
         </div>
@@ -2089,20 +2285,51 @@ echo "============================================="</pre>
 
       <div class="subsection">
         <h3>Post-Restore Steps</h3>
+        <div class="callout callout-info">
+          <strong>Important for hardware migration (GB-UXB-LTSMP-P1):</strong> After restoring the old server's database onto new hardware, the drive paths in the database will reference the old server's device names. Run the <code>UPDATE PATH</code> commands below to update all 24 drive paths to the new server's <code>/dev/lin_tape/</code> symlinks. The devconfig used for the restore was generated on the new server (after defining library/drives/paths), so the library path is already correct.
+        </div>
         <div class="cmd-block">
           <div class="cmd-label">Start the SP server after successful restore</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">cd /opt/tivoli/tsm/server/bin &amp;&amp; dsmserv</pre>
+          <pre class="cmd-pre">systemctl start tsminst1.service</pre>
         </div>
         <div class="cmd-block">
-          <div class="cmd-label">Or start via systemd</div>
+          <div class="cmd-label">Or start manually as instance owner</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">systemctl start dsmserv</pre>
+          <pre class="cmd-pre">su - tsminst1 -c "dsmserv"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Verify server is running</div>
           <button class="cmd-copy-btn">📋 Copy</button>
           <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "QUERY STATUS" 2&gt;/dev/null | head -10</pre>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-label">Update all 24 drive paths to new hardware device paths (GB-UXB-LTSMP-P1)</div>
+          <button class="cmd-copy-btn">📋 Copy</button>
+          <pre class="cmd-pre">UPDATE PATH ARDTSM1 TAPE01_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape1
+UPDATE PATH ARDTSM1 TAPE02_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape2
+UPDATE PATH ARDTSM1 TAPE03_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape3
+UPDATE PATH ARDTSM1 TAPE04_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape4
+UPDATE PATH ARDTSM1 TAPE05_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape5
+UPDATE PATH ARDTSM1 TAPE06_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape6
+UPDATE PATH ARDTSM1 TAPE07_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape7
+UPDATE PATH ARDTSM1 TAPE08_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape8
+UPDATE PATH ARDTSM1 TAPE09_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape9
+UPDATE PATH ARDTSM1 TAPE10_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape10
+UPDATE PATH ARDTSM1 TAPE11_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape11
+UPDATE PATH ARDTSM1 TAPE12_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape12
+UPDATE PATH ARDTSM1 TAPE13_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape13
+UPDATE PATH ARDTSM1 TAPE14_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape14
+UPDATE PATH ARDTSM1 TAPE15_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape15
+UPDATE PATH ARDTSM1 TAPE16_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape16
+UPDATE PATH ARDTSM1 TAPE17_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape17
+UPDATE PATH ARDTSM1 TAPE18_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape18
+UPDATE PATH ARDTSM1 TAPE19_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape19
+UPDATE PATH ARDTSM1 TAPE20_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape20
+UPDATE PATH ARDTSM1 TAPE21_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape21
+UPDATE PATH ARDTSM1 TAPE22_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape22
+UPDATE PATH ARDTSM1 TAPE23_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape23
+UPDATE PATH ARDTSM1 TAPE24_PRIM SRCTYPE=SERVER DESTTYPE=DRIVE LIBRARY=SPECTRA_PRIM DEVICE=/dev/lin_tape/IBMtape24</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Check database integrity</div>
@@ -2127,7 +2354,7 @@ echo "============================================="</pre>
         <div class="cmd-block">
           <div class="cmd-label">Run audit of the library</div>
           <button class="cmd-copy-btn">📋 Copy</button>
-          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "AUDIT LIBRARY libraryname"</pre>
+          <pre class="cmd-pre">dsmadmc -id=ADMIN -pa=PASSWORD "AUDIT LIBRARY SPECTRA_PRIM"</pre>
         </div>
         <div class="cmd-block">
           <div class="cmd-label">Run an immediate full DB backup after restore</div>
