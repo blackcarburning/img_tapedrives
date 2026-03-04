@@ -3006,6 +3006,7 @@ echo "============================================="</pre>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js" integrity="sha512-+9GoO5OUX2MmPRHUH5dnOY+KGReMLcxywEvQxvAI0y5JxXh/lkz99dKj4xdYfODP3dMFsoZRz4CF/vHcaqa2Ag==" crossorigin="anonymous"></script>
 <script>
   /* ===== Utility ===== */
 
@@ -3541,7 +3542,14 @@ echo "============================================="</pre>
   });
 
   // PDF Export
-  document.getElementById('btn-export-pdf').addEventListener('click', function () {
+  document.getElementById('btn-export-pdf').addEventListener('click', async function () {
+    var btn = this;
+    var originalText = btn.textContent;
+    btn.textContent = '⏳ Generating...';
+    btn.disabled = true;
+
+    try {
+    var container = null;
     // Sync active general notes textarea before export
     var gnActiveTab = gnGetActiveTab();
     if (gnActiveTab) { gnActiveTab.content = gnTextarea.value; }
@@ -3712,9 +3720,7 @@ echo "============================================="</pre>
       isFirst = false;
     });
 
-    var fullHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n' +
-      '<title>' + escHtml(pdfTitle) + '</title>\n' +
-      '<style>\n' +
+    var pdfCss =
       '@page { margin: 15mm; }\n' +
       'body { font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; background: #fff; color: #111; font-size: 13px; margin: 0; padding: 0; }\n' +
       '.pdf-header { border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 16px; }\n' +
@@ -3743,27 +3749,78 @@ echo "============================================="</pre>
       '.pdf-ascii { font-family: \'Courier New\', Courier, monospace; font-size: 11px; background: #f5f5f5; border: 1px solid #ddd; padding: 8px 12px; white-space: pre; margin-bottom: 10px; }\n' +
       '.pdf-notes { background: #fffde7; border: 1px solid #f0e68c; padding: 10px 14px; margin-top: 14px; page-break-inside: avoid; }\n' +
       '.pdf-notes-heading { font-weight: 700; font-size: 13px; margin-bottom: 6px; }\n' +
-      '.pdf-notes-content { white-space: pre-wrap; font-size: 12px; color: #333; }\n' +
-      '@media print {\n' +
-      '  .pdf-cmd-block, .pdf-callout, .pdf-table, .pdf-notes { page-break-inside: avoid; }\n' +
-      '  .pdf-table tr { page-break-inside: avoid; }\n' +
-      '}\n' +
-      '</style>\n</head>\n<body>\n' +
+      '.pdf-notes-content { white-space: pre-wrap; font-size: 12px; color: #333; }\n';
+
+    var container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '210mm';
+    container.style.background = '#ffffff';
+    container.style.color = '#111111';
+    container.innerHTML =
+      '<style>' + pdfCss + '</style>' +
       '<div class="pdf-header"><h1>' + escHtml(docTitle) + '</h1>' +
       '<div class="pdf-timestamp">Exported: ' + escHtml(timeStr) + '</div></div>\n' +
-      bodyParts.join('\n') +
-      '\n</body>\n</html>';
+      bodyParts.join('\n');
+    document.body.appendChild(container);
 
-    var printWin = window.open('', '_blank');
-    if (!printWin) {
-      alert('Pop-up blocked. Please allow pop-ups for this page and try again.');
-      return;
+    var opt = {
+      margin: [10, 10, 10, 10],
+      filename: pdfTitle + '.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    var pdfBlob = await html2pdf().set(opt).from(container).outputPdf('blob');
+    document.body.removeChild(container);
+
+    var defaultName = 'SP_Tape_Config_Notes_' + dateStr + '.pdf';
+    var lastFilename = localStorage.getItem(LS_PREFIX + 'last_export_pdf_filename');
+    if (lastFilename) {
+      lastFilename = lastFilename.replace(/[/\\]/g, '').substring(0, 255);
     }
-    printWin.document.write(fullHtml);
-    printWin.document.close();
-    printWin.document.title = pdfTitle;
-    printWin.onload = function () { printWin.print(); };
-    setTimeout(function () { printWin.print(); }, 500);
+    var suggestedName = lastFilename || defaultName;
+
+    if (window.showSaveFilePicker) {
+      try {
+        var handle = await window.showSaveFilePicker({
+          suggestedName: suggestedName,
+          types: [{ description: 'PDF Files', accept: { 'application/pdf': ['.pdf'] } }]
+        });
+        var writable = await handle.createWritable();
+        await writable.write(pdfBlob);
+        await writable.close();
+        localStorage.setItem(LS_PREFIX + 'last_export_pdf_filename', handle.name);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('PDF save failed:', err);
+          alert('PDF save failed: ' + err.message);
+        }
+      }
+    } else {
+      var url = URL.createObjectURL(pdfBlob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedName;
+      try {
+        document.body.appendChild(a);
+        a.click();
+      } finally {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      localStorage.setItem(LS_PREFIX + 'last_export_pdf_filename', suggestedName);
+    }
+    } catch (err) {
+      if (container && container.parentNode) { container.parentNode.removeChild(container); }
+      console.error('PDF generation failed:', err);
+      alert('PDF generation failed: ' + err.message);
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
   });
 </script>
 </body>
