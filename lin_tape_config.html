@@ -621,7 +621,7 @@
     <button id="btn-rename" class="btn btn-header" title="Rename document title" aria-label="Rename document title">✏️ Rename</button>
     <button id="btn-export" class="btn btn-header" title="Export notes as JSON" aria-label="Export notes as JSON">📤 Export</button>
     <button id="btn-import" class="btn btn-header" title="Import notes from JSON" aria-label="Import notes from JSON">📥 Import</button>
-    <button id="btn-export-pdf" class="btn btn-header" title="Export all sections as PDF" aria-label="Export all sections as PDF">📄 PDF</button>
+    <button id="btn-export-word" class="btn btn-header" title="Export all sections as Word document" aria-label="Export all sections as Word document">📝 Word</button>
     <span id="import-confirm" class="import-confirm" style="display:none"></span>
     <input type="file" id="import-file-input" accept=".json" style="display:none" />
   </div>
@@ -3135,7 +3135,7 @@ echo "============================================="</pre>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js" integrity="sha512-+9GoO5OUX2MmPRHUH5dnOY+KGReMLcxywEvQxvAI0y5JxXh/lkz99dKj4xdYfODP3dMFsoZRz4CF/vHcaqa2Ag==" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.5.0/build/index.umd.js" crossorigin="anonymous"></script>
 <script>
   /* ===== Utility ===== */
 
@@ -3670,289 +3670,268 @@ echo "============================================="</pre>
     reader.readAsText(file);
   });
 
-  // PDF Export
-  document.getElementById('btn-export-pdf').addEventListener('click', async function () {
+  // Word Export
+  document.getElementById('btn-export-word').addEventListener('click', async function () {
     var btn = this;
     var originalText = btn.textContent;
     btn.textContent = '⏳ Generating...';
     btn.disabled = true;
 
     try {
-    var container = null;
-    // Sync active general notes textarea before export
-    var gnActiveTab = gnGetActiveTab();
-    if (gnActiveTab) { gnActiveTab.content = gnTextarea.value; }
+      var d = new Date();
+      var yr = d.getFullYear();
+      var mo = String(d.getMonth() + 1).padStart(2, '0');
+      var dy = String(d.getDate()).padStart(2, '0');
+      var hr = String(d.getHours()).padStart(2, '0');
+      var mn = String(d.getMinutes()).padStart(2, '0');
+      var dateStr = yr + mo + dy;
+      var timeStr = yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn;
+      var docTitle = titleEl.textContent.trim();
 
-    var d = new Date();
-    var yr = d.getFullYear();
-    var mo = String(d.getMonth() + 1).padStart(2, '0');
-    var dy = String(d.getDate()).padStart(2, '0');
-    var hr = String(d.getHours()).padStart(2, '0');
-    var mn = String(d.getMinutes()).padStart(2, '0');
-    var dateStr = yr + mo + dy;
-    var timeStr = yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn;
-    var docTitle = titleEl.textContent.trim();
-    var pdfTitle = 'SP_Tape_Config_' + dateStr;
+      // Sync active general notes textarea before export
+      var gnActiveTab = gnGetActiveTab();
+      if (gnActiveTab) { gnActiveTab.content = gnTextarea.value; }
 
-    function escHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
+      var DC = window.docx;
+      if (!DC) { throw new Error('docx library not loaded. Please ensure the docx script is loaded before attempting export.'); }
 
-    function buildSectionHtml(sectionEl, isFirst) {
-      var out = [];
-      var pageBreak = isFirst ? '' : ' style="page-break-before:always"';
-      out.push('<div class="pdf-section"' + pageBreak + '>');
+      var children = [];
 
-      // Title
-      var titleNode = sectionEl.querySelector('.section-title');
-      if (titleNode) {
-        out.push('<h2 class="pdf-section-title">' + escHtml(titleNode.textContent.trim()) + '</h2>');
+      // Title paragraph
+      children.push(new DC.Paragraph({
+        text: docTitle,
+        heading: DC.HeadingLevel.TITLE
+      }));
+
+      // Timestamp
+      children.push(new DC.Paragraph({
+        children: [new DC.TextRun({ text: 'Exported: ' + timeStr, italics: true, color: '555555' })]
+      }));
+
+      // Spacer
+      children.push(new DC.Paragraph({ text: '' }));
+
+      function makeMonoParagraph(text) {
+        return new DC.Paragraph({
+          children: [new DC.TextRun({ text: text, font: 'Courier New', size: 18 })],
+          spacing: { before: 0, after: 0 }
+        });
       }
 
-      // Description
-      var descNode = sectionEl.querySelector('.section-desc');
-      if (descNode) {
-        out.push('<p class="pdf-section-desc">' + escHtml(descNode.textContent.trim()) + '</p>');
-      }
+      function buildSectionChildren(sectionEl) {
+        var out = [];
 
-      // Walk subsections
-      var subsections = sectionEl.querySelectorAll('.subsection');
-      subsections.forEach(function (sub) {
-        out.push('<div class="pdf-subsection">');
-
-        // h3 heading
-        var h3 = sub.querySelector('h3');
-        if (h3) {
-          out.push('<h3>' + escHtml(h3.textContent.trim()) + '</h3>');
+        // Section title
+        var titleNode = sectionEl.querySelector('.section-title');
+        if (titleNode) {
+          out.push(new DC.Paragraph({
+            text: titleNode.textContent.trim(),
+            heading: DC.HeadingLevel.HEADING_1
+          }));
         }
 
-        // Command blocks
-        sub.querySelectorAll('.cmd-block').forEach(function (cmd) {
-          var label = cmd.querySelector('.cmd-label');
-          var pre = cmd.querySelector('.cmd-pre');
-          out.push('<div class="pdf-cmd-block">');
-          if (label) { out.push('<div class="pdf-cmd-label">' + escHtml(label.textContent.trim()) + '</div>'); }
-          if (pre) { out.push('<pre class="pdf-cmd-pre">' + escHtml(pre.textContent) + '</pre>'); }
-          out.push('</div>');
-        });
+        // Section description
+        var descNode = sectionEl.querySelector('.section-desc');
+        if (descNode && descNode.textContent.trim()) {
+          out.push(new DC.Paragraph({
+            children: [new DC.TextRun({ text: descNode.textContent.trim(), color: '444444' })]
+          }));
+        }
 
-        // Callout boxes
-        sub.querySelectorAll('.callout').forEach(function (callout) {
-          var type = 'info';
-          if (callout.classList.contains('callout-warn')) { type = 'warn'; }
-          else if (callout.classList.contains('callout-error')) { type = 'error'; }
-          else if (callout.classList.contains('callout-ok')) { type = 'ok'; }
-          out.push('<div class="pdf-callout pdf-callout-' + type + '">' + escHtml(callout.textContent.trim()) + '</div>');
-        });
-
-        // Tables
-        sub.querySelectorAll('.attr-table').forEach(function (tbl) {
-          out.push('<table class="pdf-table">');
-          var headers = tbl.querySelectorAll('th');
-          if (headers.length) {
-            out.push('<thead><tr>');
-            headers.forEach(function (th) { out.push('<th>' + escHtml(th.textContent.trim()) + '</th>'); });
-            out.push('</tr></thead>');
+        // Walk subsections
+        sectionEl.querySelectorAll('.subsection').forEach(function (sub) {
+          // Subsection heading
+          var h3 = sub.querySelector('h3');
+          if (h3) {
+            out.push(new DC.Paragraph({
+              text: h3.textContent.trim(),
+              heading: DC.HeadingLevel.HEADING_2
+            }));
           }
-          var rows = tbl.querySelectorAll('tbody tr');
-          if (rows.length) {
-            out.push('<tbody>');
-            rows.forEach(function (row) {
-              out.push('<tr>');
-              row.querySelectorAll('td').forEach(function (td) { out.push('<td>' + escHtml(td.textContent.trim()) + '</td>'); });
-              out.push('</tr>');
-            });
-            out.push('</tbody>');
-          }
-          out.push('</table>');
-        });
 
-        // Checklists
-        sub.querySelectorAll('.checklist').forEach(function (cl) {
-          out.push('<ul class="pdf-checklist">');
-          cl.querySelectorAll('li').forEach(function (li) {
-            var checked = li.classList.contains('checked') || (li.querySelector('input[type=checkbox]') && li.querySelector('input[type=checkbox]').checked);
-            out.push('<li>' + (checked ? '☑' : '☐') + ' ' + escHtml(li.textContent.trim()) + '</li>');
+          // Command blocks
+          sub.querySelectorAll('.cmd-block').forEach(function (cmd) {
+            var label = cmd.querySelector('.cmd-label');
+            var pre = cmd.querySelector('.cmd-pre');
+            if (label && label.textContent.trim()) {
+              out.push(new DC.Paragraph({
+                children: [new DC.TextRun({ text: label.textContent.trim(), bold: true })]
+              }));
+            }
+            if (pre) {
+              var lines = pre.textContent.split('\n');
+              lines.forEach(function (line) { out.push(makeMonoParagraph(line)); });
+            }
+            out.push(new DC.Paragraph({ text: '' }));
           });
-          out.push('</ul>');
+
+          // Callout boxes
+          sub.querySelectorAll('.callout').forEach(function (callout) {
+            var prefix = 'ℹ️ Info';
+            if (callout.classList.contains('callout-warn')) { prefix = '⚠️ Warning'; }
+            else if (callout.classList.contains('callout-error')) { prefix = '❌ Error'; }
+            else if (callout.classList.contains('callout-ok')) { prefix = '✅ OK'; }
+            out.push(new DC.Paragraph({
+              children: [new DC.TextRun({ text: prefix + ': ' + callout.textContent.trim() })]
+            }));
+          });
+
+          // Tables
+          sub.querySelectorAll('.attr-table').forEach(function (tbl) {
+            var rows = [];
+            var headers = tbl.querySelectorAll('th');
+            if (headers.length) {
+              var headerCells = [];
+              headers.forEach(function (th) {
+                headerCells.push(new DC.TableCell({
+                  children: [new DC.Paragraph({ children: [new DC.TextRun({ text: th.textContent.trim(), bold: true })] })],
+                  shading: { fill: 'EEEEEE' }
+                }));
+              });
+              rows.push(new DC.TableRow({ children: headerCells, tableHeader: true }));
+            }
+            tbl.querySelectorAll('tbody tr').forEach(function (row) {
+              var cells = [];
+              row.querySelectorAll('td').forEach(function (td) {
+                cells.push(new DC.TableCell({
+                  children: [new DC.Paragraph({ text: td.textContent.trim() })]
+                }));
+              });
+              if (cells.length) { rows.push(new DC.TableRow({ children: cells })); }
+            });
+            if (rows.length) {
+              out.push(new DC.Table({
+                rows: rows,
+                width: { size: 100, type: DC.WidthType.PERCENTAGE }
+              }));
+              out.push(new DC.Paragraph({ text: '' }));
+            }
+          });
+
+          // Checklists
+          sub.querySelectorAll('.checklist').forEach(function (cl) {
+            cl.querySelectorAll('li').forEach(function (li) {
+              var cbInput = li.querySelector('input[type=checkbox]');
+              var checked = li.classList.contains('checked') || (cbInput && cbInput.checked);
+              out.push(new DC.Paragraph({
+                children: [new DC.TextRun({ text: (checked ? '☑' : '☐') + ' ' + li.textContent.trim() })]
+              }));
+            });
+          });
+
+          // Reference links
+          sub.querySelectorAll('a[href]').forEach(function (a) {
+            var href = a.getAttribute('href');
+            if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+              out.push(new DC.Paragraph({
+                children: [
+                  new DC.TextRun({ text: a.textContent.trim() + ': ', size: 20 }),
+                  new DC.TextRun({ text: href, color: '0055AA', size: 20 })
+                ]
+              }));
+            }
+          });
+
+          // ASCII art / pre blocks (not cmd-pre)
+          sub.querySelectorAll('pre:not(.cmd-pre)').forEach(function (pre) {
+            var lines = pre.textContent.split('\n');
+            lines.forEach(function (line) { out.push(makeMonoParagraph(line)); });
+            out.push(new DC.Paragraph({ text: '' }));
+          });
         });
 
-        // Reference links
-        sub.querySelectorAll('a[href]').forEach(function (a) {
-          var href = a.getAttribute('href');
-          if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-            out.push('<div class="pdf-ref-link"><span>' + escHtml(a.textContent.trim()) + '</span>: <span class="pdf-ref-url">' + escHtml(href) + '</span></div>');
-          }
-        });
-
-        // ASCII art / pre blocks (not cmd-pre)
-        sub.querySelectorAll('pre:not(.cmd-pre)').forEach(function (pre) {
-          out.push('<pre class="pdf-ascii">' + escHtml(pre.textContent) + '</pre>');
-        });
-
-        out.push('</div>'); // subsection
-      });
-
-      // Also handle top-level cmd-blocks/callouts/tables not inside a subsection
-      sectionEl.querySelectorAll(':scope > .cmd-block').forEach(function (cmd) {
-        var label = cmd.querySelector('.cmd-label');
-        var pre = cmd.querySelector('.cmd-pre');
-        out.push('<div class="pdf-cmd-block">');
-        if (label) { out.push('<div class="pdf-cmd-label">' + escHtml(label.textContent.trim()) + '</div>'); }
-        if (pre) { out.push('<pre class="pdf-cmd-pre">' + escHtml(pre.textContent) + '</pre>'); }
-        out.push('</div>');
-      });
-
-      // Per-section notes (read from textarea value)
-      var ta = sectionEl.querySelector('.notes-textarea');
-      if (ta && ta.value.trim()) {
-        out.push('<div class="pdf-notes"><div class="pdf-notes-heading">📝 Notes</div><div class="pdf-notes-content">' + escHtml(ta.value.trim()) + '</div></div>');
-      }
-
-      out.push('</div>'); // pdf-section
-      return out.join('\n');
-    }
-
-    // Build General Notes section
-    function buildGeneralNotesHtml(isFirst) {
-      if (!gnData || !gnData.tabs || gnData.tabs.length === 0) { return ''; }
-      var hasContent = gnData.tabs.some(function (t) { return t.content && t.content.trim(); });
-      if (!hasContent) { return ''; }
-      var pageBreak = isFirst ? '' : ' style="page-break-before:always"';
-      var out = ['<div class="pdf-section"' + pageBreak + '>'];
-      out.push('<h2 class="pdf-section-title">📝 General Notes</h2>');
-      gnData.tabs.forEach(function (tab) {
-        if (!tab.content || !tab.content.trim()) { return; }
-        out.push('<h3>' + escHtml(tab.name || 'Tab') + '</h3>');
-        out.push('<div class="pdf-notes-content">' + escHtml(tab.content.trim()) + '</div>');
-      });
-      out.push('</div>');
-      return out.join('\n');
-    }
-
-    // Assemble all sections
-    var bodyParts = [];
-    var isFirst = true;
-    SECTION_IDS.forEach(function (id) {
-      if (id === 'general-notes') {
-        var gnHtml = buildGeneralNotesHtml(isFirst);
-        if (gnHtml) { bodyParts.push(gnHtml); isFirst = false; }
-        return;
-      }
-      var sectionEl = document.getElementById(id);
-      if (!sectionEl) { return; }
-      bodyParts.push(buildSectionHtml(sectionEl, isFirst));
-      isFirst = false;
-    });
-
-    var pdfCss =
-      '@page { margin: 15mm; }\n' +
-      'body { font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; background: #fff; color: #111; font-size: 13px; margin: 0; padding: 0; }\n' +
-      '.pdf-header { border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 16px; }\n' +
-      '.pdf-header h1 { font-size: 20px; margin: 0 0 4px; }\n' +
-      '.pdf-timestamp { font-size: 11px; color: #555; }\n' +
-      '.pdf-section { margin-bottom: 24px; }\n' +
-      '.pdf-section-title { font-size: 18px; font-weight: 700; color: #111; border-bottom: 1px solid #ccc; padding-bottom: 6px; margin-bottom: 10px; }\n' +
-      '.pdf-section-desc { color: #444; font-size: 12px; margin-bottom: 14px; }\n' +
-      '.pdf-subsection { margin-bottom: 18px; }\n' +
-      '.pdf-subsection h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #555; margin: 12px 0 6px; }\n' +
-      '.pdf-cmd-block { margin-bottom: 10px; page-break-inside: avoid; }\n' +
-      '.pdf-cmd-label { font-weight: 700; color: #333; font-size: 12px; margin-bottom: 3px; }\n' +
-      '.pdf-cmd-pre { font-family: \'Courier New\', Courier, monospace; font-size: 12px; background: #f5f5f5; border: 1px solid #ddd; padding: 8px 12px; margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }\n' +
-      '.pdf-callout { padding: 8px 12px; margin-bottom: 10px; border-left: 4px solid #0066cc; background: #fff; page-break-inside: avoid; font-size: 12px; }\n' +
-      '.pdf-callout-warn { border-left-color: #cc8800; }\n' +
-      '.pdf-callout-error { border-left-color: #cc0000; }\n' +
-      '.pdf-callout-ok { border-left-color: #008844; }\n' +
-      '.pdf-table { border-collapse: collapse; width: 100%; margin-bottom: 12px; font-size: 12px; page-break-inside: avoid; }\n' +
-      '.pdf-table th { background: #eee; font-weight: 600; text-align: left; padding: 6px 10px; border: 1px solid #bbb; }\n' +
-      '.pdf-table td { padding: 5px 10px; border: 1px solid #bbb; }\n' +
-      '.pdf-table tbody tr:nth-child(even) td { background: #f9f9f9; }\n' +
-      '.pdf-checklist { list-style: none; padding: 0; margin-bottom: 10px; font-size: 12px; }\n' +
-      '.pdf-checklist li { padding: 2px 0; }\n' +
-      '.pdf-ref-link { font-size: 11px; color: #333; margin-bottom: 4px; }\n' +
-      '.pdf-ref-url { color: #0055aa; }\n' +
-      '.pdf-ascii { font-family: \'Courier New\', Courier, monospace; font-size: 11px; background: #f5f5f5; border: 1px solid #ddd; padding: 8px 12px; white-space: pre; margin-bottom: 10px; }\n' +
-      '.pdf-notes { background: #fffde7; border: 1px solid #f0e68c; padding: 10px 14px; margin-top: 14px; page-break-inside: avoid; }\n' +
-      '.pdf-notes-heading { font-weight: 700; font-size: 13px; margin-bottom: 6px; }\n' +
-      '.pdf-notes-content { white-space: pre-wrap; font-size: 12px; color: #333; }\n';
-
-    var container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    container.style.width = '210mm';
-    container.style.background = '#ffffff';
-    container.style.color = '#111111';
-    container.innerHTML =
-      '<style>' + pdfCss + '</style>' +
-      '<div class="pdf-header"><h1>' + escHtml(docTitle) + '</h1>' +
-      '<div class="pdf-timestamp">Exported: ' + escHtml(timeStr) + '</div></div>\n' +
-      bodyParts.join('\n');
-    document.body.appendChild(container);
-
-    var opt = {
-      margin: [10, 10, 10, 10],
-      filename: pdfTitle + '.pdf',
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: {
-        scale: 1.5,
-        useCORS: true,
-        letterRendering: true,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 794 // 210mm at 96dpi (A4 width); omitting windowHeight lets html2canvas measure full content height naturally
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'] }
-    };
-    var pdfBlob = await html2pdf().set(opt).from(container).outputPdf('blob');
-    document.body.removeChild(container);
-
-    var defaultName = 'SP_Tape_Config_Notes_' + dateStr + '.pdf';
-    var lastFilename = localStorage.getItem(LS_PREFIX + 'last_export_pdf_filename');
-    if (lastFilename) {
-      lastFilename = lastFilename.replace(/[/\\]/g, '').substring(0, 255);
-    }
-    var suggestedName = lastFilename || defaultName;
-
-    if (window.showSaveFilePicker) {
-      try {
-        var handle = await window.showSaveFilePicker({
-          suggestedName: suggestedName,
-          types: [{ description: 'PDF Files', accept: { 'application/pdf': ['.pdf'] } }]
-        });
-        var writable = await handle.createWritable();
-        await writable.write(pdfBlob);
-        await writable.close();
-        localStorage.setItem(LS_PREFIX + 'last_export_pdf_filename', handle.name);
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          console.error('PDF save failed:', err);
-          alert('PDF save failed: ' + err.message);
+        // Per-section notes
+        var ta = sectionEl.querySelector('.notes-textarea');
+        if (ta && ta.value.trim()) {
+          out.push(new DC.Paragraph({
+            children: [new DC.TextRun({ text: '📝 Notes', bold: true, size: 24 })]
+          }));
+          var noteLines = ta.value.trim().split('\n');
+          noteLines.forEach(function (line) {
+            out.push(new DC.Paragraph({ text: line }));
+          });
         }
+
+        // Spacer between sections
+        out.push(new DC.Paragraph({ text: '' }));
+        return out;
       }
-    } else {
-      var url = URL.createObjectURL(pdfBlob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = suggestedName;
-      try {
-        document.body.appendChild(a);
-        a.click();
-      } finally {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+
+      // Process each section
+      SECTION_IDS.forEach(function (id) {
+        if (id === 'general-notes') {
+          // General Notes section
+          if (!gnData || !gnData.tabs || gnData.tabs.length === 0) { return; }
+          var hasContent = gnData.tabs.some(function (t) { return t.content && t.content.trim(); });
+          if (!hasContent) { return; }
+          children.push(new DC.Paragraph({
+            text: '📝 General Notes',
+            heading: DC.HeadingLevel.HEADING_1
+          }));
+          gnData.tabs.forEach(function (tab) {
+            if (!tab.content || !tab.content.trim()) { return; }
+            children.push(new DC.Paragraph({
+              text: tab.name || 'Tab',
+              heading: DC.HeadingLevel.HEADING_2
+            }));
+            tab.content.trim().split('\n').forEach(function (line) {
+              children.push(new DC.Paragraph({ text: line }));
+            });
+          });
+          children.push(new DC.Paragraph({ text: '' }));
+          return;
+        }
+        var sectionEl = document.getElementById(id);
+        if (!sectionEl) { return; }
+        buildSectionChildren(sectionEl).forEach(function (p) { children.push(p); });
+      });
+
+      var doc = new DC.Document({
+        sections: [{ properties: {}, children: children }]
+      });
+
+      var wordBlob = await DC.Packer.toBlob(doc);
+
+      var defaultName = 'SP_Tape_Config_Notes_' + dateStr + '.docx';
+      var lastFilename = localStorage.getItem(LS_PREFIX + 'last_export_word_filename');
+      if (lastFilename) {
+        lastFilename = lastFilename.replace(/[/\\]/g, '').replace(/[\x00-\x1f]/g, '').substring(0, 255);
       }
-      localStorage.setItem(LS_PREFIX + 'last_export_pdf_filename', suggestedName);
-    }
+      var suggestedName = lastFilename || defaultName;
+
+      if (window.showSaveFilePicker) {
+        try {
+          var handle = await window.showSaveFilePicker({
+            suggestedName: suggestedName,
+            types: [{ description: 'Word Document', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } }]
+          });
+          var writable = await handle.createWritable();
+          await writable.write(wordBlob);
+          await writable.close();
+          localStorage.setItem(LS_PREFIX + 'last_export_word_filename', handle.name);
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            console.error('Word save failed:', err);
+            alert('Word save failed: ' + err.message);
+          }
+        }
+      } else {
+        var url = URL.createObjectURL(wordBlob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = suggestedName;
+        try {
+          document.body.appendChild(a);
+          a.click();
+        } finally {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+        localStorage.setItem(LS_PREFIX + 'last_export_word_filename', suggestedName);
+      }
     } catch (err) {
-      if (container && container.parentNode) { container.parentNode.removeChild(container); }
-      console.error('PDF generation failed:', err);
-      alert('PDF generation failed: ' + err.message);
+      console.error('Word generation failed:', err);
+      alert('Word generation failed: ' + err.message);
     } finally {
       btn.textContent = originalText;
       btn.disabled = false;
