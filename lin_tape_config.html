@@ -3904,11 +3904,10 @@ echo "============================================="</pre>
         letterRendering: true,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: container.scrollWidth,
-        windowHeight: container.scrollHeight
+        windowWidth: 794 // 210mm at 96dpi (A4 width); omitting windowHeight lets html2canvas measure full content height naturally
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      pagebreak: { mode: ['css', 'legacy'] }
     };
     var pdfBlob = await html2pdf().set(opt).from(container).outputPdf('blob');
     document.body.removeChild(container);
