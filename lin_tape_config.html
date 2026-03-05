@@ -3873,6 +3873,10 @@ echo "============================================="</pre>
       '.pdf-notes { background: #fffde7; border: 1px solid #f0e68c; padding: 10px 14px; margin-top: 14px; page-break-inside: avoid; }\n' +
       '.pdf-notes-heading { font-weight: 700; font-size: 13px; margin-bottom: 6px; }\n' +
       '.pdf-notes-content { white-space: pre-wrap; font-size: 12px; color: #333; }\n' +
+      '.pdf-toc { page-break-after: always; }\n' +
+      '.pdf-toc h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #111; border-bottom: 2px solid #333; padding-bottom: 8px; }\n' +
+      '.pdf-toc ol { list-style: decimal; padding-left: 24px; font-size: 13px; line-height: 2; }\n' +
+      '.pdf-toc li { color: #333; }\n' +
       '@media print {\n' +
       '  .pdf-cmd-block, .pdf-callout, .pdf-table, .pdf-notes { page-break-inside: avoid; }\n' +
       '  .pdf-table tr { page-break-inside: avoid; }\n' +
@@ -3880,6 +3884,23 @@ echo "============================================="</pre>
       '</style>\n</head>\n<body>\n' +
       '<div class="pdf-header"><h1>' + escHtml(docTitle) + '</h1>' +
       '<div class="pdf-timestamp">Exported: ' + escHtml(timeStr) + '</div></div>\n' +
+      (function () {
+        var tocItems = [];
+        SECTION_IDS.forEach(function (id) {
+          var titleText = '';
+          if (id === 'general-notes') {
+            titleText = 'General Notes';
+          } else {
+            var secEl = document.getElementById(id);
+            if (secEl) {
+              var titleNode = secEl.querySelector('.section-title');
+              if (titleNode) { titleText = titleNode.textContent.trim(); }
+            }
+          }
+          if (titleText) { tocItems.push('<li>' + escHtml(titleText) + '</li>'); }
+        });
+        return tocItems.length ? '<div class="pdf-toc"><h2>Table of Contents</h2><ol>' + tocItems.join('') + '</ol></div>\n' : '';
+      })() +
       bodyParts.join('\n') +
       '\n</body>\n</html>';
 
