@@ -10,20 +10,20 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:         #0d0d1a;
-    --bg2:        #13132a;
-    --bg3:        #1a1a3a;
-    --sidebar-bg: #0f0f24;
-    --border:     #2a2a4a;
-    --text:       #c8cce8;
-    --text-dim:   #6b6f9c;
-    --accent:     #00d4ff;
-    --green:      #4ecca3;
-    --yellow:     #ffd166;
-    --red:        #ef4444;
-    --blue:       #5b8dee;
-    --cmd-bg:     #0a0a1f;
-    --cmd-border: #1e2050;
+    --bg:         #f5f6fa;
+    --bg2:        #ffffff;
+    --bg3:        #e8eaf0;
+    --sidebar-bg: #f0f1f6;
+    --border:     #d1d5e0;
+    --text:       #2d3142;
+    --text-dim:   #6c7289;
+    --accent:     #0066cc;
+    --green:      #198754;
+    --yellow:     #cc8800;
+    --red:        #dc3545;
+    --blue:       #0d6efd;
+    --cmd-bg:     #f8f9fc;
+    --cmd-border: #d1d5e0;
     --header-h:   56px;
     --sidebar-w:  270px;
     --radius:     8px;
@@ -151,7 +151,7 @@
     color: var(--accent);
   }
   #nav-list li a.active {
-    background: rgba(0, 212, 255, 0.08);
+    background: rgba(0, 102, 204, 0.1);
     border-left-color: var(--accent);
     color: var(--accent);
     font-weight: 600;
@@ -231,7 +231,7 @@
   .cmd-pre {
     font-family: 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
     font-size: 13px;
-    color: #e0e6ff;
+    color: #2d3142;
     padding: 10px 14px 10px;
     white-space: pre-wrap;
     word-break: break-all;
@@ -256,12 +256,12 @@
   }
   .cmd-copy-btn:hover {
     background: var(--accent);
-    color: #000;
+    color: #ffffff;
     border-color: var(--accent);
   }
   .cmd-copy-btn.copied {
     background: var(--green);
-    color: #000;
+    color: #ffffff;
     border-color: var(--green);
   }
 
@@ -273,10 +273,10 @@
     border-left: 4px solid;
     font-size: 13.5px;
   }
-  .callout-info  { background: rgba(0,212,255,0.07);  border-color: var(--accent); }
-  .callout-warn  { background: rgba(255,209,102,0.07); border-color: var(--yellow); color: var(--yellow); }
-  .callout-error { background: rgba(239,68,68,0.07);  border-color: var(--red);    color: #f88; }
-  .callout-ok    { background: rgba(78,204,163,0.07); border-color: var(--green);  color: var(--green); }
+  .callout-info  { background: rgba(0,102,204,0.08);  border-color: var(--accent); }
+  .callout-warn  { background: rgba(204,136,0,0.08); border-color: var(--yellow); color: var(--yellow); }
+  .callout-error { background: rgba(220,53,69,0.08);  border-color: var(--red);    color: #dc3545; }
+  .callout-ok    { background: rgba(25,135,84,0.08); border-color: var(--green);  color: var(--green); }
 
   .callout strong { display: block; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; }
   .callout ul { margin-left: 18px; margin-top: 4px; }
@@ -345,12 +345,12 @@
     transition: background var(--transition), color var(--transition);
   }
   .btn-primary {
-    background: rgba(0,212,255,0.12);
+    background: rgba(0,102,204,0.1);
     color: var(--accent);
     border-color: var(--accent);
   }
-  .btn-primary:hover { background: var(--accent); color: #000; }
-  .btn-primary.copied { background: var(--green); color: #000; border-color: var(--green); }
+  .btn-primary:hover { background: var(--accent); color: #ffffff; }
+  .btn-primary.copied { background: var(--green); color: #ffffff; border-color: var(--green); }
 
   /* ===== Header Actions (rename / export / import) ===== */
   #header-actions {
@@ -361,7 +361,7 @@
     flex-shrink: 0;
   }
   .btn-header {
-    background: rgba(255,255,255,0.05);
+    background: rgba(0,0,0,0.04);
     color: var(--text-dim);
     border-color: var(--border);
     padding: 5px 10px;
@@ -438,7 +438,7 @@
   .notes-modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.5);
     z-index: 1000;
     display: flex;
     align-items: center;
@@ -590,7 +590,7 @@
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.3);
     z-index: 90;
   }
 
@@ -605,7 +605,7 @@
     }
     #sidebar.open {
       transform: translateX(0);
-      box-shadow: 4px 0 20px rgba(0,0,0,0.6);
+      box-shadow: 4px 0 20px rgba(0,0,0,0.15);
     }
     #overlay.open { display: block; }
     #main { margin-left: 0; padding: 16px 12px 60px; }
